@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}Powiadomienia — Ustawienia{% endblock %}
+{% block content %}
+{% set active_tab = 'notify' %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Panel administracyjny</span>
+        <h1 class="page-title">Ustawienia</h1>
+    </div>
+</div>
+
+{% include "_settings_tabs.html" %}
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+
+{% set on = cfg.notify_enabled == '1' %}
+
+{% if not smtp_ready %}
+<p class="error">Nie skonfigurowano serwera poczty — powiadomienia nie mają czym wyjść.
+    Ustaw SMTP w zakładce <a href="/settings/smtp">Poczta</a>.</p>
+{% endif %}
+
+<section class="panel glow-card" style="max-width: 720px;">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+            Powiadomienia
+        </h2>
+        {% if on %}<span class="pill pill-ok"><span class="dot"></span>włączone</span>
+        {% else %}<span class="pill pill-idle">wyłączone</span>{% endif %}
+    </div>
+
+    <p class="hint">Zdarzenia z całego portalu, nie tylko z syslogu. Wszystko startuje
+    <b>wyłączone</b> — włączasz świadomie, po jednym typie. Nadawcę i odbiorców bierzemy
+    z zakładki <a href="/settings/smtp">Poczta</a>.</p>
+
+    <form method="post" action="/settings/notifications">
+        <label style="display:flex; align-items:center; gap:0.5rem;">
+            <input type="checkbox" name="notify_enabled" value="1" style="width:auto;" {% if on %}checked{% endif %}>
+            <b>Wysyłaj powiadomienia</b> (główny przełącznik)
+        </label>
+
+        <div class="panel-head" style="margin-top:1.4rem;"><h2 style="font-size:0.95rem;">Co zgłaszać</h2></div>
+        {% for key, label in event_types %}
+        <label style="display:flex; align-items:center; gap:0.5rem; margin:0.35rem 0;">
+            <input type="checkbox" name="{{ key }}" value="1" style="width:auto;"
+                   {% if cfg[key] == '1' %}checked{% endif %}>
+            {{ label }}
+        </label>
+        {% endfor %}
+
+        <label style="display:flex; align-items:center; gap:0.5rem; margin:0.9rem 0 0;">
+            <input type="checkbox" name="notify_weekly_report" value="1" style="width:auto;"
+                   {% if cfg.notify_weekly_report == '1' %}checked{% endif %}>
+            <b>Cotygodniowy raport</b> — puls floty w poniedziałek rano
+        </label>
+        <p class="hint" style="margin:0.2rem 0 0;">Wyciszenia bezterminowe, kondycja floty,
+        nieudane kopie, dostępne aktualizacje, zdarzenia z urządzeń i statystyki samych
+        powiadomień. Wysyłany zawsze, także gdy wszystko jest w porządku — jego wartość
+        polega na regularności. Pomija bezpieczniki (nie jest zdarzeniem).</p>
+
+        <div class="panel-head" style="margin-top:1.4rem;"><h2 style="font-size:0.95rem;">Bezpieczniki</h2></div>
+        <p class="hint" style="margin-top:0;">Trzy niezależne hamulce — jeden nie wystarcza,
+        bo każdy chroni przed czym innym. Zero wyłącza dany bezpiecznik.</p>
+
+        <label for="notify_dedup_minutes">Wyciszanie powtórek (minuty)</label>
+        <input type="number" id="notify_dedup_minutes" name="notify_dedup_minutes" min="0"
+               value="{{ cfg.notify_dedup_minutes }}" required>
+        <p class="hint" style="margin-top:0.2rem;">To samo zdarzenie z tego samego źródła nie leci
+        ponownie przez ten czas. Chroni przed migającym łączem generującym setki identycznych zgłoszeń.</p>
+
+        <label for="notify_max_per_device_hour">Limit na urządzenie (na godzinę)</label>
+        <input type="number" id="notify_max_per_device_hour" name="notify_max_per_device_hour" min="0"
+               value="{{ cfg.notify_max_per_device_hour }}" required>
+        <p class="hint" style="margin-top:0.2rem;">Chroni przed jednym zepsutym routerem, który
+        zasypuje skrzynkę różnymi błędami.</p>
+
+        <label for="notify_max_total_hour">Limit globalny (na godzinę)</label>
+        <input type="number" id="notify_max_total_hour" name="notify_max_total_hour" min="0"
+               value="{{ cfg.notify_max_total_hour }}" required>
+        <p class="hint" style="margin-top:0.2rem;">Chroni przed awarią zasilania w lokalizacji, gdzie
+        naraz odzywa się kilkanaście urządzeń.</p>
+
+        <p class="form-foot"><button type="submit">Zapisz</button></p>
+    </form>
+</section>
+
+<section class="panel glow-card" style="max-width: 720px;">
+    <div class="panel-head"><h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+        Ostatnia doba
+    </h2></div>
+    <dl class="kv-grid">
+        <div class="kv"><dt>Wysłane (godzina)</dt><dd>{{ stats.sent_hour }}</dd></div>
+        <div class="kv"><dt>Wysłane (doba)</dt><dd>{{ stats.sent_day }}</dd></div>
+        <div class="kv"><dt>Wyciszone (doba)</dt><dd>
+            {% if stats.suppressed_day %}<span class="pill pill-info">{{ stats.suppressed_day }}</span>
+            {% else %}0{% endif %}</dd></div>
+        <div class="kv"><dt>Nieudane (doba)</dt><dd>
+            {% if stats.failed_day %}<span class="pill pill-bad">{{ stats.failed_day }}</span>
+            {% else %}0{% endif %}</dd></div>
+    </dl>
+    <p class="hint">Wyciszone zdarzenia trafiają do dziennika z powodem — nic nie ginie po cichu,
+    po prostu nie zamienia się w pocztę.</p>
+</section>
+
+<section class="panel glow-card" style="max-width: 720px;">
+    <div class="panel-head"><h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>
+        Raport na żądanie
+    </h2></div>
+    <p class="hint">Nie musisz czekać do poniedziałku — wyślij ten sam raport teraz albo
+    obejrzyj jego treść w przeglądarce (przydatne, gdy SMTP jeszcze nie działa).
+    Pomija bezpieczniki i główny przełącznik, tak jak wysyłka testowa poczty.</p>
+    <div class="head-tools" style="gap:0.6rem;">
+        <form method="post" action="/settings/notifications/send-report" class="bare">
+            <button type="submit" class="button-sm" {% if not smtp_ready %}disabled title="Najpierw skonfiguruj SMTP"{% endif %}>Wyślij raport teraz</button>
+        </form>
+        <a href="/settings/notifications/preview-report" target="_blank"
+           class="button button-ghost button-sm" style="text-decoration:none;">Podejrzyj treść</a>
+    </div>
+</section>
+
+<section class="panel glow-card">
+    <div class="panel-head"><h2>Wyjątki — kto ma własne ustawienia</h2>
+        {% if overrides.indefinite %}<span class="pill pill-warn">{{ overrides.indefinite }} bezterminowo</span>{% endif %}
+    </div>
+    {% if overrides.rows %}
+    <p class="hint" style="margin-top:0;">Przy kilkuset urządzeniach nie da się pamiętać, gdzie co
+    ustawiono — tu masz komplet. Wyciszenia z terminem znikną same; <b>bezterminowe zostają,
+    dopóki ich nie zdejmiesz</b>.</p>
+    <div class="table-wrap table-fit">
+        <table>
+            <thead><tr><th>Zakres</th><th>Nazwa</th><th>Ustawienie</th><th>Od</th><th></th></tr></thead>
+            <tbody>
+                {% for row in overrides.rows %}
+                <tr>
+                    <td class="empty">{{ 'lokalizacja' if row.override.scope_type == 'location' else 'urządzenie' }}
+                        {% if row.override.scope_type == 'location' %}<br>
+                        <span class="empty">({{ row.affected }} urządzeń)</span>{% endif %}</td>
+                    <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
+                    <td>{% if row.override.mode == 'muted' %}
+                            {% if row.forever %}<span class="pill pill-warn">wyciszone bezterminowo</span>
+                            {% else %}<span class="pill pill-idle">wyciszone do {{ row.override.muted_until.strftime("%m-%d %H:%M") }}</span>{% endif %}
+                        {% else %}<span class="pill pill-info">własne</span>
+                            <span class="empty">{{ row.events | length }} typów</span>{% endif %}</td>
+                    <td class="empty cell-nowrap">{{ row.override.created_at.strftime("%m-%d %H:%M") }}</td>
+                    <td><form method="post" action="/settings/notifications/override/{{ row.override.id }}/delete" class="bare">
+                        <button type="submit" class="button-ghost button-sm">przywróć domyślne</button></form></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">Brak wyjątków — cała flota działa na ustawieniach globalnych.</div>
+    {% endif %}
+</section>
+
+<section class="panel glow-card">
+    <div class="panel-head"><h2>Dziennik</h2></div>
+    {% if recent %}
+    <div class="table-wrap table-fit">
+        <table>
+            <thead><tr><th>Kiedy</th><th>Zdarzenie</th><th>Temat</th><th>Status</th><th>Powód</th></tr></thead>
+            <tbody>
+                {% for n in recent %}
+                <tr>
+                    <td class="empty cell-nowrap">{{ n.created_at.strftime("%m-%d %H:%M:%S") }}</td>
+                    <td class="empty" style="font-family:var(--mono); font-size:0.76rem;">{{ n.event_key }}</td>
+                    <td>{{ n.subject }}</td>
+                    <td>{% if n.status == 'sent' %}<span class="pill pill-ok">wysłane</span>
+                        {% elif n.status == 'suppressed' %}<span class="pill pill-idle">wyciszone</span>
+                        {% else %}<span class="pill pill-bad">{{ n.status }}</span>{% endif %}</td>
+                    <td class="empty">{{ n.reason or "—" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">Jeszcze nic nie zgłoszono.</div>
+    {% endif %}
+</section>
+{% endblock %}

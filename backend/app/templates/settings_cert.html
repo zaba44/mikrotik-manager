@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Certyfikat — Ustawienia{% endblock %}
+{% block content %}
+{% set active_tab = 'cert' %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Panel administracyjny</span>
+        <h1 class="page-title">Ustawienia</h1>
+    </div>
+</div>
+
+{% include "_settings_tabs.html" %}
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+
+<section class="panel glow-card" style="max-width: 720px;">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Certyfikat HTTPS panelu
+        </h2>
+        {% if info.self_managed %}<span class="pill pill-info">z wbudowanego CA</span>
+        {% elif info.present %}<span class="pill pill-ok">własny</span>
+        {% else %}<span class="pill pill-bad">brak</span>{% endif %}
+    </div>
+
+    {% if info.present and not info.error %}
+    <dl class="kv-grid">
+        <div class="kv"><dt>Wystawiony na</dt><dd>
+            {% for a in info.addresses %}<span class="chip">{{ a }}</span> {% endfor %}
+            {% if not info.addresses %}<span class="empty">—</span>{% endif %}</dd></div>
+        <div class="kv"><dt>Ważny do</dt><dd>{{ info.not_after.strftime("%Y-%m-%d") }}</dd></div>
+        <div class="kv"><dt>Wystawca</dt><dd class="empty" style="font-size:0.8rem;">{{ info.issuer }}</dd></div>
+    </dl>
+    {% elif info.error %}
+    <p class="error">Nie udało się odczytać certyfikatu: {{ info.error }}</p>
+    {% else %}
+    <div class="empty-state">Brak certyfikatu — wygeneruj poniżej.</div>
+    {% endif %}
+
+    <p class="hint"><b>Jeden certyfikat obejmuje wszystkie wypisane adresy</b>, więc nie trzeba
+    wybierać jednego. Dopisz każdy, pod którym wchodzisz do panelu: adres w sieci lokalnej,
+    adres huba w tunelu, adres używany przez peera administracyjnego.</p>
+</section>
+
+<section class="panel glow-card" style="max-width: 720px;">
+    <div class="panel-head"><h2>Wygeneruj z wbudowanego CA</h2></div>
+    <p class="hint">Portal ma własny urząd certyfikacji. Certyfikat CA instalujesz w systemie
+    <b>raz</b>, a potem możesz generować certyfikat serwera dowolnie często (np. dopisując
+    nowy adres) — przeglądarka dalej pokaże kłódkę, bo ufa wystawcy.</p>
+    <form method="post" action="/settings/cert/regenerate">
+        <label for="addresses">Adresy (po przecinku)</label>
+        <input type="text" id="addresses" name="addresses" required
+               value="{{ suggested }}" placeholder="192.168.1.10, 10.22.20.1, localhost">
+        <p class="hint" style="margin-top:0.3rem;">Podpowiedź zawiera adres huba w tunelu
+        i adresy peerów administracyjnych, jeśli są skonfigurowane.</p>
+        <p class="form-foot"><button type="submit">Wygeneruj certyfikat</button></p>
+    </form>
+</section>
+
+<section class="panel glow-card" style="max-width: 720px;">
+    <div class="panel-head"><h2>Certyfikat CA do zainstalowania</h2></div>
+    {% if info.own_ca_present %}
+    <p class="hint">Pobierz i zainstaluj w magazynie zaufanych certyfikatów systemu albo
+    przeglądarki (na Windows: „Zaufane główne urzędy certyfikacji"). To <b>tylko część
+    publiczna</b> — bezpieczna do rozdania na maszyny administracyjne.</p>
+    <p class="hint"><b>Świadoma decyzja:</b> po instalacji Twój system zaufa wszystkiemu,
+    co ten portal podpisze. Klucz CA leży na serwerze portalu i jedzie w jego kopii zapasowej.</p>
+    <p><a href="/settings/cert/ca.pem" class="button button-ghost" style="text-decoration:none;">Pobierz certyfikat CA</a></p>
+    {% else %}
+    <div class="empty-state">Wbudowane CA jeszcze nie istnieje — powstanie przy pierwszym generowaniu.</div>
+    {% endif %}
+</section>
+
+<section class="panel glow-card" style="max-width: 720px;">
+    <div class="panel-head"><h2>Wgraj własny certyfikat</h2></div>
+    <p class="hint">Jeśli masz własne CA (albo certyfikat od zewnętrznego wystawcy), wgraj
+    tutaj plik certyfikatu i klucz prywatny w formacie PEM. Sprawdzimy, czy do siebie pasują,
+    zanim je podmienimy — inaczej panel mógłby nie wstać po restarcie.</p>
+    <form method="post" action="/settings/cert/upload" enctype="multipart/form-data">
+        <label for="cert_file">Certyfikat (PEM, może zawierać łańcuch)</label>
+        <input type="file" id="cert_file" name="cert_file" accept=".pem,.crt,.cer" required>
+        <label for="key_file">Klucz prywatny (PEM, bez hasła)</label>
+        <input type="file" id="key_file" name="key_file" accept=".pem,.key" required>
+        <p class="form-foot"><button type="submit">Wgraj i podmień</button></p>
+    </form>
+</section>
+
+<section class="panel glow-card" style="max-width: 720px;">
+    <div class="panel-head"><h2>Po zmianie certyfikatu</h2></div>
+    <p class="hint">Caddy wczytuje certyfikat przy starcie, więc po wygenerowaniu albo wgraniu
+    nowego trzeba go przeładować. Panel będzie niedostępny przez kilka sekund — nic poza tym
+    się nie dzieje, urządzenia nie tracą łączności (tunel obsługuje osobny kontener).</p>
+    <div class="code-block">
+        <div class="code-head"><span>na serwerze portalu</span><button type="button" class="copy-btn">Kopiuj</button></div>
+        <pre>docker restart mtm-caddy</pre>
+    </div>
+</section>
+{% endblock %}

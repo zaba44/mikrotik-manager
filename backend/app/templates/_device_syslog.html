@@ -1,0 +1,90 @@
+{% set is_admin = request.state.user and request.state.user.role == 'admin' %}
+{% if result and not result.ok %}
+<p class="error">Nie udało się zmienić ustawień syslogu na routerze: {{ result.error }}</p>
+{% endif %}
+
+{% if is_admin and not globally_on %}
+<p class="hint"><span class="pill pill-idle">odbiór wyłączony globalnie</span>
+    Portal nie przyjmuje zdarzeń od żadnego urządzenia — włącz odbiór w
+    <a href="/settings/syslog">Ustawieniach → Syslog</a>, wtedy podepniesz ten router.
+    {% if device.syslog_enabled %}<br>To urządzenie <b>nadal ma konfigurację na routerze</b>
+    i wysyła w próżnię; możesz ją zdjąć tu albo zbiorczo w ustawieniach.{% endif %}</p>
+{% endif %}
+
+{% if is_admin and (globally_on or device.syslog_enabled) %}
+<form method="post" action="/devices/{{ device.id }}/syslog" class="head-tools"
+      hx-post="/devices/{{ device.id }}/syslog" hx-target="#syslog-body" hx-swap="innerHTML"
+      hx-disabled-elt="find button" style="gap:0.6rem; margin-bottom:0.9rem;">
+    <input type="hidden" name="enable" value="{{ '0' if device.syslog_enabled else '1' }}">
+    {% if not device.syslog_enabled %}
+    <label class="hint" style="margin:0; display:flex; align-items:center; gap:0.4rem;">
+        <input type="checkbox" name="include_info" value="1" style="width:auto;"> dołącz <code>info</code>
+    </label>
+    {% endif %}
+    <button type="submit" class="{% if device.syslog_enabled %}button-ghost {% endif %}button-sm">
+        {{ 'Odłącz od syslogu' if device.syslog_enabled else 'Podłącz do syslogu' }}
+    </button>
+</form>
+{% endif %}
+
+{% if cleared is defined and cleared is not none %}
+<p class="notice">Wyczyszczono zapisane wpisy tego urządzenia ({{ cleared }}).</p>
+{% endif %}
+
+{# Odczyt jednorazowy — działa NIEZALEŻNIE od tego, czy syslog jest podłączony. #}
+<p class="hint" style="margin-top:0;">
+    <a href="/devices/{{ device.id }}/log-report" class="button-ghost button-sm"
+       style="text-decoration:none;">Pobierz raport zdarzeń</a>
+    Jednorazowy odczyt bufora routera (kilka dni wstecz) z odsianiem <code>info</code> —
+    bez włączania syslogu i bez zapisywania czegokolwiek w portalu.
+</p>
+
+{% if is_admin and entries %}
+<form method="post" action="/devices/{{ device.id }}/syslog/clear"
+      hx-post="/devices/{{ device.id }}/syslog/clear" hx-target="#syslog-body" hx-swap="innerHTML"
+      hx-confirm="Usunąć zapisane wpisy syslog tego urządzenia? Nie zmienia to ustawień na routerze."
+      class="bare" style="margin-bottom:0.8rem;">
+    <button type="submit" class="button-ghost button-sm">Wyczyść zapisane wpisy</button>
+</form>
+{% endif %}
+
+<p class="hint" style="margin-top:0;">
+    {% if device.syslog_enabled %}
+    <span class="pill pill-ok"><span class="dot"></span>podłączone</span>
+    Router wysyła <b>warning</b>, <b>error</b> i <b>critical</b>{% if device.syslog_info_enabled %}
+    oraz <b>info</b>{% endif %} na hub przez tunel.
+    {% if device.syslog_info_enabled %}<b>Uwaga:</b> <code>info</code> generuje setki wpisów na dobę
+    (dominuje <code>dhcp,info</code>) — zostawiaj je włączone tylko na czas diagnostyki.{% else %}
+    Poziom <code>info</code> możesz dołączyć na czas diagnostyki, odłączając i podłączając ponownie.{% endif %}
+    {% else %}
+    <span class="pill pill-idle">odłączone</span>
+    Po podłączeniu router sam wysyła zdarzenia w chwili ich powstania — portal go o nie nie odpytuje.
+    {% endif %}
+</p>
+
+{% if entries %}
+<div class="table-wrap table-fit">
+    <table>
+        <thead><tr><th>Odebrano</th><th>Poziom</th><th>Topiki</th><th>Wiadomość</th></tr></thead>
+        <tbody>
+            {% for e in entries %}
+            <tr>
+                <td class="empty cell-nowrap">{{ e.received_at.strftime("%m-%d %H:%M:%S") }}</td>
+                <td>{% if e.level == 'critical' %}<span class="pill pill-bad">critical</span>
+                    {% elif e.level == 'error' %}<span class="pill pill-bad">error</span>
+                    {% elif e.level == 'warning' %}<span class="pill pill-warn">warning</span>
+                    {% else %}<span class="pill pill-idle">{{ e.level }}</span>{% endif %}</td>
+                <td class="empty" style="font-family:var(--mono); font-size:0.76rem;">{{ e.topics }}</td>
+                <td>{{ e.message }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% elif entries is not none %}
+<div class="empty-state">
+    {% if device.syslog_enabled %}Brak wpisów — router jest podłączony, ale nic jeszcze nie zgłosił.
+    Przy filtrze <code>warning</code> i wyżej to normalne: na spokojnym urządzeniu takie zdarzenia
+    pojawiają się rzadko.{% else %}Syslog nie jest włączony dla tego urządzenia.{% endif %}
+</div>
+{% endif %}

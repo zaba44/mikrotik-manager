@@ -1,0 +1,14 @@
+{% set run_active = run and run.status == "running" %}
+{% set can_operate = request.state.user and (request.state.user.role == 'admin' or (request.state.user.role == 'operator' and not request.state.user.status_only)) %}
+{# Samowygaszający polling przebiegu zbiorczej aktualizacji lokalizacji (jak przy
+   pojedynczym urządzeniu): co 2s dopóki run trwa, potem cichnie. #}
+<div id="location-update"{% if run_active %} hx-get="/locations/{{ location.id }}/fragment/update" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+    {% include "_update_run_log.html" %}
+
+    {% if can_operate %}
+    <form method="post" action="/locations/{{ location.id }}/update-all" class="bare"
+          data-confirm="Zaktualizować wszystkie urządzenia w {{ location.name }}? To może potrwać długo (kilka restartów sekwencyjnie).">
+        <button type="submit" {% if run_active %}disabled title="Aktualizacja już w toku"{% endif %}>Aktualizuj wszystkie urządzenia</button>
+    </form>
+    {% endif %}
+</div>

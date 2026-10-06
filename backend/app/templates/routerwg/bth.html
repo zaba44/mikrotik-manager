@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Back To Home — {{ device.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Back To Home</span>
+        <h1 class="page-title">{{ device.name }} <span class="chip">{{ device.wg_ip }}</span></h1>
+        <p class="page-sub"><a href="/devices/{{ device.id }}">← wróć do urządzenia</a>
+            · <a href="/devices/{{ device.id }}/wireguard">monitor WireGuard</a>
+            {% if s.ok %} · RouterOS {{ s.version }} · {{ s.arch }} · {{ s.board }}{% endif %}</p>
+    </div>
+</div>
+
+{% if msg %}<p class="notice">{{ msg }}</p>{% endif %}
+{% if err %}<p class="error">{{ err }}</p>{% endif %}
+
+{% if not s.ok %}
+<p class="error">Nie udało się odczytać routera: {{ s.error }}</p>
+{% elif not s.supported %}
+<p class="error">{{ s.reason }}</p>
+{% elif not s.enabled %}
+
+<section class="panel glow-card">
+    <div class="panel-head"><h2>Back To Home jest wyłączone</h2>
+        <span class="sec-summary">stan: {{ s.cloud['back-to-home-vpn'] }}</span></div>
+    <p class="hint" style="margin-top:0;">Back To Home to VPN MikroTika do sieci tego routera, który
+    działa także wtedy, gdy router nie ma publicznego adresu — w razie potrzeby ruch idzie przez
+    serwery pośredniczące (relay) MikroTika.</p>
+    <p class="hint">Po włączeniu router:</p>
+    <ul class="hint" style="margin-top:-0.6rem;">
+        <li>dostanie adres <code>*.vpn.mynetname.net</code> — osobny od Twojej nazwy DDNS
+            {% if s.cloud['dns-name'] %}(<code>{{ s.cloud['dns-name'] }}</code>, ta się nie zmieni){% endif %},</li>
+        <li>sam doda interfejs <code>back-to-home-vpn</code> z siecią 192.168.216.0/24
+            i dynamiczną regułę <code>accept</code> w firewallu,</li>
+        <li>zarejestruje się w serwerach pośredniczących MikroTika.</li>
+    </ul>
+    {% if s.cloud['ddns-enabled'] == 'no' %}
+    <p class="notice">DDNS jest wyłączony, a Back To Home go wymaga — zostanie ustawiony na
+    <code>auto</code>, czyli będzie działał tylko dopóki potrzebuje go Back To Home.</p>
+    {% else %}
+    <p class="hint">Ustawienie DDNS (<code>{{ s.cloud['ddns-enabled'] }}</code>) zostaje bez zmian.</p>
+    {% endif %}
+    {% if is_admin %}
+    <form method="post" action="/devices/{{ device.id }}/bth/enable" class="bare"
+          data-confirm="Włączyć Back To Home na {{ device.name }}? Przed zmianą zapisuję zrzut stanu.">
+        <button type="submit">Włącz Back To Home</button>
+    </form>
+    <p class="hint" style="margin-top:0.8rem;">Wyłączanie jest poza zakresem portalu — robisz je
+    na routerze (<code>/ip cloud set back-to-home-vpn=revoked-and-disabled</code>).</p>
+    {% endif %}
+</section>
+
+{% else %}
+{% set c = s.cloud %}
+{% macro conn_cell(k) -%}
+    {%- if not k %}<span class="empty">nigdy</span>
+    {%- elif k.status == 'active' %}<span class="pill pill-ok"><span class="dot"></span>połączony</span>
+    {%- elif k.status == 'idle' %}<span class="pill pill-idle">nieaktywny</span>
+    {%- else %}<span class="empty">nigdy</span>{% endif %}
+    {%- if k and k.status != 'never' %}<br><span class="empty">{{ k.ago }} temu{% if k.endpoint %} · {{ k.endpoint }}{% endif %}</span>{% endif %}
+{%- endmacro %}
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>Status</h2>
+        <span class="sec-summary">
+            {% if c['vpn-status'] == 'running' %}<span class="pill pill-ok"><span class="dot"></span>działa</span>
+            {% else %}<span class="pill pill-warn">{{ c['vpn-status'] or '—' }}</span>{% endif %}
+        </span>
+    </div>
+    <dl class="kv-grid">
+        <div class="kv"><dt>Adres VPN</dt><dd><code>{{ c['vpn-dns-name'] or '—' }}</code></dd></div>
+        <div class="kv"><dt>Port</dt><dd>{{ c['vpn-port'] or '—' }}</dd></div>
+        <div class="kv"><dt>DDNS</dt><dd><code>{{ c['dns-name'] or '—' }}</code></dd></div>
+        <div class="kv"><dt>Relay IPv4</dt><dd>{{ c['vpn-relay-ipv4-status'] or '—' }}</dd></div>
+        <div class="kv"><dt>Relay IPv6</dt><dd>{{ c['vpn-relay-ipv6-status'] or '—' }}</dd></div>
+        <div class="kv"><dt>Regiony</dt><dd>{{ c['vpn-relay-regions'] or '—' }}</dd></div>
+    </dl>
+</section>
+
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>Użytkownicy</h2>
+        <span class="sec-summary">{{ s.users | length }} + konfiguracja domyślna</span>
+    </div>
+    <div class="table-wrap">
+        <table class="sortable" id="bth-users">
+            <thead><tr>
+                <th data-sort="text">Nazwa</th><th data-sort="text">Komentarz</th>
+                <th data-sort="text">Połączenie</th><th data-sort="text">Sieć lokalna</th>
+                <th data-sort="text">Adres</th><th data-sort="text">Wygasa</th>
+                {% if is_admin %}<th></th>{% endif %}
+            </tr></thead>
+            <tbody>
+            {# Konfiguracja „zerowa": router tworzy ja sam przy wlaczeniu BTH i trzyma w /ip/cloud,
+               poza lista uzytkownikow. Ma wlasny klucz — to pelnoprawny dostep do sieci. #}
+            <tr>
+                <td><b>domyślny</b><br><span class="empty">tworzy go router przy włączeniu BTH</span></td>
+                <td><span class="empty">—</span></td>
+                <td>{{ conn_cell(s.default_conn) }}</td>
+                <td><span class="pill pill-ok">tak</span></td>
+                <td><code>192.168.216.2</code></td>
+                <td>never</td>
+                {% if is_admin %}
+                <td style="text-align:right;">
+                    <button type="button" class="button-ghost button-sm"
+                            hx-get="/devices/{{ device.id }}/bth/config?uid=default"
+                            hx-target="#bth-config" hx-swap="innerHTML"
+                            hx-on::after-request="document.getElementById('bth-config').scrollIntoView({behavior: 'smooth', block: 'start'})">Config</button>
+                </td>
+                {% endif %}
+            </tr>
+            {% for u in s.users %}
+            <tr>
+                <td><b>{{ u.name }}</b></td>
+                <td>
+                    {% if is_admin %}
+                    <form method="post" action="/devices/{{ device.id }}/bth/users/comment" class="form-inline"
+                          data-confirm="Zapisać komentarz użytkownika {{ u.name }}?">
+                        <input type="hidden" name="uid" value="{{ u['.id'] }}">
+                        <input type="text" name="comment" value="{{ u.comment or '' }}" style="min-width:12rem;">
+                        <button type="submit" class="button-ghost button-sm">Zapisz</button>
+                    </form>
+                    {% else %}{{ u.comment or "—" }}{% endif %}
+                </td>
+                <td>
+                    {{ conn_cell(u.conn) }}
+                    {% if u.disabled == 'true' %}<br><span class="pill pill-bad">konto wyłączone</span>
+                    {% elif u.active != 'true' %}<br><span class="pill pill-warn">konto nieaktywne (wygasło?)</span>{% endif %}
+                </td>
+                <td>{% if u['allow-lan'] in ('true', 'yes') %}<span class="pill pill-ok">tak</span>
+                    {% else %}<span class="pill pill-idle">nie</span>{% endif %}</td>
+                <td><code>{{ (u['client-address'] or '—').split(',')[0] }}</code></td>
+                <td>{{ u.expires or "never" }}</td>
+                {% if is_admin %}
+                <td style="text-align:right;">
+                    <button type="button" class="button-ghost button-sm"
+                            hx-get="/devices/{{ device.id }}/bth/config?uid={{ u['.id'] | urlencode }}"
+                            hx-target="#bth-config" hx-swap="innerHTML"
+                            hx-on::after-request="document.getElementById('bth-config').scrollIntoView({behavior: 'smooth', block: 'start'})">Config</button>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if is_admin %}
+    <form method="post" action="/devices/{{ device.id }}/bth/users/add" class="form-inline" style="margin-top:1rem;"
+          data-confirm="Dodać użytkownika Back To Home? Przed zmianą zapisuję zrzut stanu.">
+        <input type="text" name="name" placeholder="nazwa, np. telefon-dominik" required pattern="[A-Za-z0-9._\-]{1,64}">
+        <label style="display:flex; align-items:center; gap:0.35rem; margin:0;">
+            <input type="checkbox" name="allow_lan" value="1" checked style="width:auto;"> dostęp do sieci lokalnej
+        </label>
+        <select name="expires" style="width:auto;">
+            {% for e in expires_options %}
+            <option value="{{ e }}">{{ "bez terminu" if not e else "wygasa po " ~ e }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Dodaj użytkownika</button>
+    </form>
+    <p class="hint">Klucze generuje router. Config z kodem QR otworzysz przyciskiem „Config" —
+    także w wersji „tylko sieć lokalna", której router sam nie zapisuje.</p>
+    {% endif %}
+</section>
+
+{% if is_admin %}<div id="bth-config"></div>{% endif %}
+{% endif %}
+{% endblock %}

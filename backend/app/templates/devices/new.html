@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Nowe urządzenie — MikroTik Manager{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Rejestracja</span>
+        <h1 class="page-title">Zarejestruj urządzenie</h1>
+        <p class="page-sub">Portal wygeneruje klucze WireGuard, przydzieli adres IP z puli i przygotuje gotowy skrypt konfiguracyjny do wklejenia na MikroTiku.</p>
+    </div>
+</div>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<section class="panel glow-card" style="max-width: 680px;">
+    <form method="post" action="/devices">
+        <label for="name">Nazwa</label>
+        <input type="text" id="name" name="name" value="{{ prefill_name or '' }}" required>
+
+        <label for="location_id">Lokalizacja</label>
+        <select id="location_id" name="location_id">
+            <option value="">— brak —</option>
+            {% for location in locations %}
+            <option value="{{ location.id }}" {% if location.id | string == selected_location_id %}selected{% endif %}>{{ location.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="notes">Notatki (informacje sieciowe, konfiguracja, cokolwiek trzeba zapamiętać)</label>
+        <textarea id="notes" name="notes" rows="10">{{ prefill_notes or "" }}</textarea>
+
+        <p class="form-foot"><button type="submit">Zarejestruj i wygeneruj config</button></p>
+    </form>
+</section>
+{% endblock %}

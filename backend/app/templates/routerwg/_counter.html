@@ -1,0 +1,3 @@
+{%- if iface and counts and iface.name in counts -%}
+aktywnych <b>{{ counts[iface.name][0] }}</b> / {{ counts[iface.name][1] }}
+{%- endif -%}

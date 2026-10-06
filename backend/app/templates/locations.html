@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Lokalizacje — MikroTik Manager{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Struktura sieci</span>
+        <h1 class="page-title">Lokalizacje</h1>
+    </div>
+</div>
+
+{% if request.state.user and request.state.user.role == 'admin' %}
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            Dodaj lokalizację
+        </h2>
+    </div>
+    <form class="form-inline" hx-post="/locations" hx-target="#locations-list" hx-swap="outerHTML" hx-on::after-request="this.reset()">
+        <input type="text" name="name" placeholder="Nazwa lokalizacji" required>
+        <input type="text" name="notes" placeholder="Notatki (opcjonalnie)">
+        <button type="submit">Dodaj</button>
+    </form>
+</section>
+{% endif %}
+
+<div class="head-tools" style="margin-bottom: 1rem;">
+    <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+        <input type="search" placeholder="Szukaj lokalizacji…" data-filter="#locations-list tbody tr" data-filter-empty="#locations-search-empty" aria-label="Szukaj lokalizacji">
+    </div>
+</div>
+
+{% include "_locations_list.html" %}
+<p class="empty" id="locations-search-empty" style="display:none;">Brak lokalizacji pasujących do wyszukiwania.</p>
+{% endblock %}

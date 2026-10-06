@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Ustawienia — MikroTik Manager{% endblock %}
+{% block content %}
+{% set active_tab = 'backups' %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Panel administracyjny</span>
+        <h1 class="page-title">Ustawienia</h1>
+    </div>
+</div>
+
+{% include "_settings_tabs.html" %}
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<section class="panel glow-card" style="max-width: 680px;">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13.5h4"/></svg>
+            Kopie zapasowe
+        </h2>
+    </div>
+    <p class="hint">Export (<code>/export terse show-sensitive</code>) i backup binarny zawsze lecą razem,
+    wg jednego harmonogramu, sekwencyjnie po urządzeniach (jedno na raz — żeby nie przeciążyć huba
+    przy większej liczbie routerów naraz).</p>
+    <form method="post" action="/settings">
+        <label for="backup_schedule_hours">Częstotliwość (co ile godzin)</label>
+        <input type="number" id="backup_schedule_hours" name="backup_schedule_hours" min="1"
+               value="{{ backup_settings.backup_schedule_hours }}" required>
+
+        <label for="backup_retention_count">Retencja — ile ostatnich kopii zachować (per urządzenie, per typ)</label>
+        <input type="number" id="backup_retention_count" name="backup_retention_count" min="1"
+               value="{{ backup_settings.backup_retention_count }}" required>
+
+        <p class="form-foot"><button type="submit">Zapisz</button></p>
+    </form>
+</section>
+
+<section class="panel glow-card" style="max-width: 680px;">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            Kopia całego portalu
+        </h2>
+    </div>
+    {% if restore_pending %}
+    <div class="error" style="margin-bottom:0.8rem;">
+        <strong>Odtwarzanie kopii portalu nie jest dokończone.</strong> Dane są odtworzone, ale
+        tunel huba albo część peerów jeszcze nie weszła — portal ponawia to sam co minutę.
+        Prób: {{ restore_pending.attempts }}{% if restore_pending.last_errors %}; ostatni błąd:
+        {{ restore_pending.last_errors | join("; ") }}{% endif %}.
+        <form method="post" action="/settings/portal-restore/resume" style="margin-top:0.5rem;">
+            <button type="submit">Ponów teraz</button>
+        </form>
+    </div>
+    {% endif %}
+    <p class="hint">Pełna kopia zapasowa portalu (baza, klucze, konfiguracja WG, sekrety) do
+    odtworzenia po awarii — przywracasz ją w kreatorze pierwszego uruchomienia, a flota wraca
+    sama, bez dotykania routerów. <strong>To klucze do całego portalu — trzymaj plik bezpiecznie.</strong></p>
+    <form method="post" action="/settings/portal-backup">
+        <label style="display:flex; align-items:center; gap:0.55rem; cursor:pointer;">
+            <input type="checkbox" name="include_device_backups" checked style="width:auto; margin:0;">
+            Dołącz kopie urządzeń (export + binarne). Odznacz = sama konfiguracja (mniejszy plik).
+        </label>
+        <label style="display:flex; align-items:center; gap:0.55rem; cursor:pointer; margin-top:0.5rem;">
+            <input type="checkbox" name="include_logs" style="width:auto; margin:0;">
+            Dołącz zapisane zdarzenia (syslog). Domyślnie odznaczone — to historia, nie konfiguracja,
+            a przy dużej flocie potrafi zdominować rozmiar archiwum.
+        </label>
+        <label style="display:flex; align-items:center; gap:0.55rem; cursor:pointer; margin-top:0.5rem;">
+            <input type="checkbox" name="include_history" style="width:auto; margin:0;">
+            Dołącz historię (przebiegi aktualizacji i dziennik wysłanych powiadomień). Odznaczone —
+            konfiguracja (w tym cele pingów i wyciszenia powiadomień) jest w kopii zawsze.
+        </label>
+        <p class="form-foot"><button type="submit">Pobierz kopię portalu</button></p>
+    </form>
+</section>
+{% endblock %}

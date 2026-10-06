@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Poczta — Ustawienia{% endblock %}
+{% block content %}
+{% set active_tab = 'smtp' %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Panel administracyjny</span>
+        <h1 class="page-title">Ustawienia</h1>
+    </div>
+</div>
+
+{% include "_settings_tabs.html" %}
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+
+{% set on = smtp.smtp_enabled == '1' %}
+
+<section class="panel glow-card" style="max-width: 680px;">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+            Serwer poczty (SMTP)
+        </h2>
+        {% if on %}<span class="pill pill-ok"><span class="dot"></span>włączona</span>
+        {% else %}<span class="pill pill-idle">wyłączona</span>{% endif %}
+    </div>
+
+    <p class="hint">Konfiguracja wysyłki. Same powiadomienia (co i komu portal ma zgłaszać —
+    zdarzenia z syslogu, logowania do panelu, urządzenia offline, błędy kopii i aktualizacji)
+    dojdą osobno, jako subskrypcje z limitami wysyłki. Tu ustawiasz sam kanał i możesz go
+    <b>przetestować niezależnie</b> od tego, czy wysyłka jest włączona.</p>
+
+    <form method="post" action="/settings/smtp">
+        <label style="display:flex; align-items:center; gap:0.5rem;">
+            <input type="checkbox" name="smtp_enabled" value="1" style="width:auto;" {% if on %}checked{% endif %}>
+            Zezwól portalowi na wysyłanie poczty
+        </label>
+
+        <label for="smtp_host" style="margin-top:1rem;">Serwer SMTP</label>
+        <input type="text" id="smtp_host" name="smtp_host" placeholder="np. smtp.twojadomena.pl"
+               value="{{ smtp.smtp_host }}">
+
+        <label for="smtp_port">Port</label>
+        <input type="number" id="smtp_port" name="smtp_port" min="1" max="65535" value="{{ smtp.smtp_port }}">
+
+        <label for="smtp_security">Szyfrowanie</label>
+        <select id="smtp_security" name="smtp_security">
+            <option value="starttls" {% if smtp.smtp_security == 'starttls' %}selected{% endif %}>STARTTLS (zwykle port 587)</option>
+            <option value="ssl" {% if smtp.smtp_security == 'ssl' %}selected{% endif %}>SSL/TLS (zwykle port 465)</option>
+            <option value="none" {% if smtp.smtp_security == 'none' %}selected{% endif %}>Bez szyfrowania (tylko sieć lokalna!)</option>
+        </select>
+
+        <label for="smtp_username">Login <span class="empty">(puste = bez uwierzytelniania)</span></label>
+        <input type="text" id="smtp_username" name="smtp_username" value="{{ smtp.smtp_username }}"
+               autocomplete="off">
+
+        <label for="smtp_password">Hasło
+            {% if smtp.has_password %}<span class="empty">— ustawione; puste pole zostawia bez zmian</span>
+            {% else %}<span class="empty">— nieustawione</span>{% endif %}</label>
+        <input type="password" id="smtp_password" name="smtp_password" autocomplete="new-password"
+               placeholder="{% if smtp.has_password %}bez zmian{% else %}hasło do konta SMTP{% endif %}">
+        <p class="hint" style="margin-top:0.3rem;">Hasło trafia do bazy zaszyfrowane (tak samo jak
+        hasła API urządzeń i klucze WireGuard) i nigdy nie wraca do tego formularza. Jedzie w kopii
+        portalu razem z kluczem szyfrującym, więc odtworzenie portalu odtwarza też działającą pocztę.</p>
+
+        <label for="smtp_from" style="margin-top:1rem;">Nadawca <span class="empty">(pole „From")</span></label>
+        <input type="text" id="smtp_from" name="smtp_from" placeholder="np. mikrotik@twojadomena.pl"
+               value="{{ smtp.smtp_from }}">
+
+        <label for="smtp_to">Domyślni odbiorcy <span class="empty">(kilka adresów po przecinku)</span></label>
+        <input type="text" id="smtp_to" name="smtp_to" placeholder="ty@twojadomena.pl, dyzur@twojadomena.pl"
+               value="{{ smtp.smtp_to }}">
+
+        <p class="form-foot"><button type="submit">Zapisz</button></p>
+    </form>
+</section>
+
+<section class="panel glow-card" style="max-width: 680px;">
+    <div class="panel-head"><h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>
+        Wysyłka testowa
+    </h2></div>
+    <p class="hint">Wysyła jedną wiadomość teraz, z pominięciem przełącznika powyżej — możesz
+    sprawdzić ustawienia, zanim pozwolisz portalowi wysyłać cokolwiek samodzielnie.
+    Błąd serwera pocztowego pokażemy w całości, bo zwykle to jedyna wskazówka, co jest nie tak.</p>
+    <form method="post" action="/settings/smtp/test" class="form-inline">
+        <input type="text" name="to" placeholder="adres testowy (puste = domyślni odbiorcy)"
+               value="" style="flex:1 1 260px;">
+        <button type="submit" class="button-ghost" {% if not smtp.smtp_host %}disabled title="Najpierw podaj serwer SMTP"{% endif %}>
+            Wyślij wiadomość testową
+        </button>
+    </form>
+</section>
+
+{% if smtp.has_password %}
+<section class="panel panel-danger" style="max-width: 680px;">
+    <div class="panel-head"><h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="m6 7 1 13a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7"/></svg>
+        Usuń hasło SMTP
+    </h2></div>
+    <p class="hint">Kasuje zapisane hasło. Przydatne, gdy serwer przestaje wymagać
+    uwierzytelniania albo gdy chcesz mieć pewność, że stare hasło nie leży w bazie.</p>
+    <form method="post" action="/settings/smtp/clear-password" class="bare"
+          data-confirm="Usunąć zapisane hasło SMTP?">
+        <button type="submit" class="button-warn button-sm">Usuń hasło</button>
+    </form>
+</section>
+{% endif %}
+{% endblock %}

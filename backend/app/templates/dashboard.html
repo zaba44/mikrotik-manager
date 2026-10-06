@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Wszystkie — MikroTik Manager{% endblock %}
+{% block content %}
+{% set total = devices | length %}
+{% set online = devices | selectattr("api_reachable") | list | length %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Przegląd floty</span>
+        <h1 class="page-title">Wszystkie</h1>
+    </div>
+</div>
+
+<div class="stats">
+    <div class="panel stat glow-card tilt">
+        <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01"/><path d="M17.5 13V7"/><path d="M14.8 5.6a4 4 0 0 1 5.4 0"/></svg>
+        </div>
+        <div>
+            <div class="stat-value" data-count="{{ total }}">{{ total }}</div>
+            <div class="stat-label">Urządzenia</div>
+        </div>
+    </div>
+    <div class="panel stat stat-ok glow-card tilt">
+        <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+        </div>
+        <div>
+            <div class="stat-value" data-count="{{ online }}">{{ online }}</div>
+            <div class="stat-label">Online (REST API)</div>
+        </div>
+    </div>
+    <div class="panel stat stat-bad glow-card tilt">
+        <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+        </div>
+        <div>
+            <div class="stat-value" data-count="{{ total - online }}">{{ total - online }}</div>
+            <div class="stat-label">Poza zasięgiem</div>
+        </div>
+    </div>
+    <div class="panel stat glow-card tilt">
+        <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.6-7-11a7 7 0 1 1 14 0c0 5.4-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+        </div>
+        <div>
+            <div class="stat-value" data-count="{{ locations | length }}">{{ locations | length }}</div>
+            <div class="stat-label">Lokalizacje</div>
+        </div>
+    </div>
+</div>
+
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01"/><path d="M17.5 13V7"/><path d="M14.8 5.6a4 4 0 0 1 5.4 0"/></svg>
+            Urządzenia
+        </h2>
+        <div class="head-tools">
+            <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+                <input type="search" placeholder="Szukaj urządzenia…" data-filter="#dash-devices tbody tr" data-filter-empty="#dash-devices-empty" aria-label="Szukaj urządzenia">
+            </div>
+            <a class="button button-ghost button-sm" href="/devices/new">+ Nowe urządzenie</a>
+        </div>
+    </div>
+    {% if devices %}
+    <div class="table-wrap">
+        <table class="sortable" id="dash-devices">
+            <thead>
+                <tr>
+                    <th data-sort="text">Nazwa</th>
+                    <th data-sort="text">Identity (MikroTik)</th>
+                    <th data-sort="text">Lokalizacja</th>
+                    <th data-sort="text">WG IP</th>
+                    <th data-sort="number">Status</th>
+                    <th data-sort="text">Uptime</th>
+                    <th data-sort="text">Dodano</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for device in devices %}
+                {% set status_weight = 3 if device.api_reachable else (2 if device.wg_reachable else (1 if device.last_polled_at else 0)) %}
+                <tr>
+                    <td><a href="/devices/{{ device.id }}">{{ device.name }}</a></td>
+                    <td>{{ device.routeros_identity or "—" }}</td>
+                    <td>{% if device.location %}<a href="/locations/{{ device.location.id }}">{{ device.location.name }}</a>{% else %}—{% endif %}</td>
+                    <td><span class="chip">{{ device.wg_ip }}</span></td>
+                    <td data-sort-value="{{ status_weight }}">{% include "_status_badge.html" %}</td>
+                    <td>{{ device.routeros_uptime or "—" }}</td>
+                    <td>{{ device.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="empty" id="dash-devices-empty" style="display:none;">Brak urządzeń pasujących do wyszukiwania.</p>
+    {% else %}
+    <div class="empty-state">Brak zarejestrowanych urządzeń. <a href="/devices/new">Zarejestruj pierwsze</a>.</div>
+    {% endif %}
+</section>
+
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.6-7-11a7 7 0 1 1 14 0c0 5.4-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+            Lokalizacje
+        </h2>
+        <div class="head-tools">
+            <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+                <input type="search" placeholder="Szukaj lokalizacji…" data-filter="#dash-locs .loc-card" data-filter-empty="#dash-locs-empty" aria-label="Szukaj lokalizacji">
+            </div>
+            <a class="button button-ghost button-sm" href="/locations">Zarządzaj</a>
+        </div>
+    </div>
+    {% if locations %}
+    <div class="loc-grid" id="dash-locs">
+        {% for location in locations %}
+        {% set device_count = devices | selectattr("location_id", "equalto", location.id) | list | length %}
+        <a class="panel loc-card glow-card tilt" href="/locations/{{ location.id }}">
+            <div class="loc-card-name">
+                {{ location.name }}
+                <span class="pill pill-info">{{ device_count }} urz.</span>
+            </div>
+            <div class="loc-card-notes">{{ location.notes or "—" }}</div>
+        </a>
+        {% endfor %}
+    </div>
+    <p class="empty" id="dash-locs-empty" style="display:none;">Brak lokalizacji pasujących do wyszukiwania.</p>
+    {% else %}
+    <div class="empty-state">Brak lokalizacji. <a href="/locations">Dodaj pierwszą</a>.</div>
+    {% endif %}
+</section>
+{% endblock %}

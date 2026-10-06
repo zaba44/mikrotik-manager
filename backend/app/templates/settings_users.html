@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Użytkownicy — MikroTik Manager{% endblock %}
+{% block content %}
+{% set active_tab = 'users' %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Panel administracyjny</span>
+        <h1 class="page-title">Ustawienia</h1>
+    </div>
+</div>
+
+{% include "_settings_tabs.html" %}
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<section class="panel glow-card" style="max-width: 680px;">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+            Nowy użytkownik
+        </h2>
+    </div>
+    <p class="hint">Administrator ma dostęp do wszystkiego. Operator widzi tylko przypisaną
+    lokalizację (na razie w trybie tylko-do-odczytu).</p>
+    <form method="post" action="/settings/users">
+        <label for="username">Login</label>
+        <input type="text" id="username" name="username" required autocomplete="off">
+
+        <label for="password">Hasło</label>
+        <input type="password" id="password" name="password" required autocomplete="new-password">
+
+        <label for="role">Rola</label>
+        <select id="role" name="role" onchange="document.getElementById('operator-fields').style.display = this.value === 'operator' ? 'block' : 'none';">
+            <option value="operator">Operator (jedna lokalizacja)</option>
+            <option value="admin">Administrator (pełny dostęp)</option>
+        </select>
+
+        <div id="operator-fields">
+            <label for="location_id">Lokalizacja operatora</label>
+            <select id="location_id" name="location_id">
+                <option value="">— brak —</option>
+                {% for location in locations %}
+                <option value="{{ location.id }}">{{ location.name }}</option>
+                {% endfor %}
+            </select>
+
+            <label style="display:flex; align-items:center; gap:0.55rem; margin-top:0.9rem; cursor:pointer;">
+                <input type="checkbox" name="status_only" checked style="width:auto; margin:0;">
+                Tylko statusy (podgląd bez akcji — odznacz, by mógł aktualizować/restartować swoje urządzenia)
+            </label>
+        </div>
+
+        <p class="form-foot"><button type="submit">Utwórz użytkownika</button></p>
+    </form>
+</section>
+
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Użytkownicy
+        </h2>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Login</th><th>Rola</th><th>Uprawnienia</th><th>Lokalizacja</th><th>Hasło</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.username }}{% if user.id == request.state.user.id %} <span class="pill pill-info">to Ty</span>{% endif %}</td>
+                    <td>
+                        {% if user.role == 'admin' %}<span class="pill pill-ok">Administrator</span>
+                        {% else %}<span class="pill pill-info">Operator</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if user.role == 'admin' %}<span class="empty">pełne</span>
+                        {% else %}
+                        <span class="actions-row" style="gap:0.45rem;">
+                            {% if user.status_only %}<span class="pill pill-idle">tylko statusy</span>
+                            {% else %}<span class="pill pill-warn">może operować</span>{% endif %}
+                            <form method="post" action="/settings/users/{{ user.id }}/toggle-status-only" class="bare"
+                                  {% if user.status_only %}data-confirm="Zezwolić {{ user.username }} na akcje operacyjne (aktualizacje, restarty) na urządzeniach jego lokalizacji?"{% endif %}>
+                                <button type="submit" class="button-ghost button-sm">{{ "zezwól na operacje" if user.status_only else "tylko statusy" }}</button>
+                            </form>
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td>{{ user.location.name if user.location else "—" }}</td>
+                    <td>
+                        <details>
+                            <summary style="cursor:pointer; color:var(--c2); font-size:0.82rem;">zmień</summary>
+                            <form method="post" action="/settings/users/{{ user.id }}/password" class="bare" style="margin-top:0.5rem; display:flex; gap:0.4rem; align-items:center;">
+                                <input type="password" name="new_password" placeholder="nowe hasło" required autocomplete="new-password" style="width:150px; padding:0.35rem 0.5rem;">
+                                <button type="submit" class="button-sm">ustaw</button>
+                            </form>
+                        </details>
+                    </td>
+                    <td>
+                        {% if user.id != request.state.user.id %}
+                        <form method="post" action="/settings/users/{{ user.id }}/delete" class="bare"
+                              data-confirm="Usunąć użytkownika {{ user.username }}?">
+                            <button type="submit" class="button-danger button-sm">usuń</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

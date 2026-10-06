@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Peery administracyjne — MikroTik Manager{% endblock %}
+{% block content %}
+{% set active_tab = 'admin' %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Panel administracyjny</span>
+        <h1 class="page-title">Ustawienia</h1>
+    </div>
+</div>
+
+{% include "_settings_tabs.html" %}
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+{% if new_peer %}
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            Wygenerowano peera „{{ new_peer.name }}"
+        </h2>
+        <a class="button button-ghost button-sm" href="/settings/admin-peers/{{ new_peer.id }}/config">Pobierz .conf</a>
+    </div>
+    <p class="notice">Zaimportuj poniższą konfigurację w kliencie WireGuard (np. na PC) — plik <code>.conf</code>
+    albo skopiuj tekst. Klucz prywatny jest w tej konfiguracji, więc trzymaj ją bezpiecznie.
+    <strong>Firewall na urządzeniach nie jest ruszany</strong> — na razie peer daje łączność tunelem;
+    dostęp do Winboxa konkretnych routerów dojdzie osobno (przez API).</p>
+    <div class="code-block">
+        <div class="code-head">
+            <span>wireguard · {{ new_peer.name }} ({{ new_peer.wg_ip }})</span>
+            <button type="button" class="copy-btn">Kopiuj</button>
+        </div>
+        <pre>{{ new_config }}</pre>
+    </div>
+</section>
+{% endif %}
+
+<section class="panel glow-card" style="max-width: 680px;">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+            Nowy peer administracyjny
+        </h2>
+    </div>
+    <p class="hint">Peer dla komputera zarządzającego. Dostaje adres z końca puli WG i config z
+    <code>AllowedIPs</code> = cała podsieć, więc widzi wszystkie urządzenia przez tunel.</p>
+    <form method="post" action="/settings/admin-peers">
+        <label for="name">Nazwa (np. „Laptop Dominik")</label>
+        <input type="text" id="name" name="name" required>
+        <p class="form-foot"><button type="submit">Generuj peera</button></p>
+    </form>
+</section>
+
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M5 12a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2M5 12a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2"/><path d="M7 8h.01M7 16h.01"/></svg>
+            Peery administracyjne
+        </h2>
+    </div>
+    {% if peers %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Nazwa</th><th>WG IP</th><th>Status</th><th>Dodano</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for peer in peers %}
+                <tr>
+                    <td>{{ peer.name }}</td>
+                    <td><span class="chip">{{ peer.wg_ip }}</span></td>
+                    <td>
+                        {% if peer.last_polled_at is none %}<span class="pill pill-idle">nie sprawdzono</span>
+                        {% elif peer.wg_reachable %}<span class="pill pill-ok"><span class="dot"></span>online</span>
+                        {% else %}<span class="pill pill-bad"><span class="dot"></span>offline</span>{% endif %}
+                    </td>
+                    <td>{{ peer.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+                    <td>
+                        <span class="actions-row">
+                            <a href="/settings/admin-peers/{{ peer.id }}/config">pobierz .conf</a>
+                            <form method="post" action="/settings/admin-peers/{{ peer.id }}/delete" class="bare"
+                                  data-confirm="Usunąć peera {{ peer.name }}? Zniknie z wg-mt i jego config przestanie działać.">
+                                <button type="submit" class="button-danger button-sm">usuń</button>
+                            </form>
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty">Brak peerów administracyjnych. Wygeneruj pierwszego powyżej.</p>
+    {% endif %}
+</section>
+{% endblock %}

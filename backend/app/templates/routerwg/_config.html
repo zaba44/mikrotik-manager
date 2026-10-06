@@ -1,0 +1,50 @@
+<section class="panel glow-card" id="wg-config-panel">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m8 8-4 4 4 4"/><path d="m16 8 4 4-4 4"/></svg>
+            Config: {{ peer.display_name }}
+        </h2>
+        <span class="sec-summary">{{ iface.name }}{% if peer.host_ip %} · {{ peer.host_ip }}{% endif %}</span>
+        <button type="button" class="button-ghost button-sm"
+                onclick="document.getElementById('wg-config').innerHTML = ''">Zamknij</button>
+    </div>
+
+    {% if missing %}
+    <p class="error" style="margin-top:0;">Config jest niekompletny — brakuje:
+        {% for m in missing %}<br>· {{ m }}{% endfor %}
+        <br>Wypełniacze widać w tekście; możesz je poprawić ręcznie przed zapisem.</p>
+    {% endif %}
+
+    {% if basic and not peer.client_allowed %}
+    <p class="notice" style="margin-top:0;">Ten router (RouterOS &lt; 7.21) nie przechowuje
+    AllowedIPs klienta. Popraw linię <code>AllowedIPs</code> w tekście — zmiana dotyczy tylko
+    tego configu i <b>nie zapisuje się</b> na routerze.</p>
+    {% endif %}
+
+    {# Formularz jest zwyklym POST-em (bez htmx), bo przyciski pobierania maja sciagnac plik.
+       Podglad QR idzie osobno — textarea sama wysyla swoja tresc przy kazdej zmianie. #}
+    <form method="post" action="/devices/{{ device.id }}/wireguard/download" class="wg-config-grid">
+        <input type="hidden" name="name" value="{{ peer.display_name }}">
+        <div class="code-block" style="margin:0;">
+            <div class="code-head">
+                <span>config klienta · edytowalny</span>
+                <button type="button" class="copy-btn">Kopiuj</button>
+            </div>
+            <textarea name="text" rows="15" spellcheck="false" class="wg-config-text"
+                      hx-post="/devices/{{ device.id }}/wireguard/qr"
+                      hx-trigger="input changed delay:400ms"
+                      hx-target="#wg-qr" hx-swap="innerHTML">{{ text }}</textarea>
+        </div>
+        <div>
+            <div id="wg-qr" class="wg-qr">{{ qr_svg | safe }}</div>
+            <div class="head-tools" style="gap:0.5rem; margin-top:0.8rem; justify-content:center;">
+                <button type="submit" name="fmt" value="conf" class="button-sm">Zapisz .conf</button>
+                <button type="submit" name="fmt" value="png" class="button-ghost button-sm">Zapisz PNG</button>
+            </div>
+        </div>
+    </form>
+
+    <p class="hint">Config złożony z pól peera na routerze, w formacie Twojego generatora.
+    Kod QR odświeża się przy każdej zmianie tekstu, a pobrane pliki zawierają dokładnie to,
+    co widać w oknie — razem z ręcznymi poprawkami. Niczego nie zapisujemy na routerze.</p>
+</section>

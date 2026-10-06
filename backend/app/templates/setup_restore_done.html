@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Przywrócono — MikroTik Manager</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/fx.js" defer></script>
+</head>
+<body>
+    <canvas id="bg-net" aria-hidden="true"></canvas>
+    <div class="login-wrap">
+        <div class="panel glow-card" style="max-width:520px;">
+            <div class="panel-head"><h2>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--ok)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                Portal przywrócony
+            </h2></div>
+            {% if result.complete %}
+            <p class="hint">Dane, klucze i tunel odtworzone z kopii. Flota powinna wrócić sama w ciągu ~minuty
+            (urządzenia re-negocjują tunel keepalive'm), bez dotykania routerów.</p>
+            {% endif %}
+            <dl class="kv-grid" style="margin:0.5rem 0 1rem;">
+                {% for key, val in result.counts.items() %}
+                <div class="kv"><dt>{{ key }}</dt><dd>{{ val }}</dd></div>
+                {% endfor %}
+                <div class="kv"><dt>Peery wstrzyknięte</dt><dd>{{ result.peers_injected }}</dd></div>
+                <div class="kv"><dt>Klucz huba</dt><dd>{{ "OK" if result.public_key else "—" }}</dd></div>
+            </dl>
+            {% if result.runs_closed %}<p class="hint">Przebiegi aktualizacji trwające w chwili robienia kopii
+            ({{ result.runs_closed }}) oznaczono jako przerwane — ich zadania nie wracają z kopią.</p>{% endif %}
+            {% if not result.complete %}
+            <p class="error"><strong>Odtwarzanie niedokończone.</strong> Dane i klucze są w bazie, ale:
+            {{ result.errors | join("; ") }}. Klucz huba czeka na dysku — portal ponawia sam co minutę
+            i przy każdym starcie, aż tunel i wszystkie peery wejdą. Stan i przycisk „Ponów teraz”
+            są w Ustawieniach, w sekcji kopii portalu.</p>
+            {% endif %}
+            <p class="form-foot"><a class="button" href="/login" style="width:100%;">Przejdź do logowania</a></p>
+        </div>
+    </div>
+</body>
+</html>

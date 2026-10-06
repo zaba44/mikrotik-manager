@@ -1,0 +1,65 @@
+name: Build and publish images
+
+# Obrazy budujemy PRZY TAGU, nie przy kazdym pushu — uzytkownik ma przypinac sie do
+# wersji, a nie do ruchomego "latest". Rownolegle publikujemy takze `latest`, ale
+# README wprost odradza jego uzywanie na produkcji.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # Obrazy powstaja dopiero po zielonych testach i audycie zaleznosci.
+  tests:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - name: backend
+            context: ./backend
+          - name: wireguard
+            context: ./infra/wireguard
+    steps:
+      - uses: actions/checkout@v4
+
+      # QEMU + buildx: obrazy MUSZA byc multi-arch, bo docelowy host testowy to
+      # darmowy Oracle VPS na ARM (Ampere), a produkcja na OVH bywa amd64.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            # NIE {{is_default_branch}}: przy pushu tagu to falsz (ref to tag, nie galaz),
+            # wiec `latest` nigdy nie powstawal, a .env.example podaje go jako domyslny.
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

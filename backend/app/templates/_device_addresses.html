@@ -1,0 +1,81 @@
+{# Pelna lista adresow IP + wskazanie adresu glownego. Portal niczego nie wybiera
+   automatycznie — adnotacje (typ interfejsu, dynamiczny, tunel do huba) sluza tylko
+   czytelnosci, bo przy kilkunastu wierszach sama para adres/interfejs jest nieskanowalna. #}
+{% if not r.ok %}
+<p class="error" style="margin:0;">Nie udało się odczytać adresów: {{ r.error }}</p>
+{% else %}
+
+{% if r.pinned.note %}
+<p class="notice" style="margin-top:0;">{{ r.pinned.note }}</p>
+{% endif %}
+
+<div class="table-wrap table-fit">
+    <table>
+        <thead><tr>
+            <th>Adres</th><th>Sieć</th><th>Interfejs</th><th>Typ</th><th>Uwagi</th>
+            {% if can_pin %}<th></th>{% endif %}
+        </tr></thead>
+        <tbody>
+            {% for a in r.rows %}
+            {% set is_pinned = r.pinned.interface == a.interface and (r.pinned.dynamic or r.pinned.value == a.address) %}
+            <tr{% if is_pinned %} class="row-pinned"{% endif %}>
+                <td><code>{{ a.address }}</code></td>
+                <td class="empty">{{ a.network or "—" }}</td>
+                <td>{{ a.interface }}{% if a.comment %}<br><span class="empty">{{ a.comment }}</span>{% endif %}</td>
+                <td><span class="chip">{{ a.type or "?" }}</span></td>
+                <td>
+                    {% if a.is_hub_tunnel %}<span class="pill pill-info">tunel do huba</span>{% endif %}
+                    {% if a.dynamic %}<span class="pill pill-idle">dynamiczny</span>{% endif %}
+                    {% if a.is_public %}<span class="pill pill-warn">publiczny</span>{% endif %}
+                    {% if a.disabled %}<span class="pill pill-bad">wyłączony</span>{% endif %}
+                    {% if a.invalid %}<span class="pill pill-bad">nieprawidłowy</span>{% endif %}
+                </td>
+                {% if can_pin %}
+                <td style="text-align:right; white-space:nowrap;">
+                    {% if is_pinned %}
+                    <form method="post" action="/devices/{{ device.id }}/addresses/unpin" class="bare"
+                          hx-post="/devices/{{ device.id }}/addresses/unpin"
+                          hx-target="#addresses-body" hx-swap="innerHTML">
+                        <button type="submit" class="button-ghost button-sm">Odepnij</button>
+                    </form>
+                    {% else %}
+                    <form method="post" action="/devices/{{ device.id }}/addresses/pin" class="bare"
+                          hx-post="/devices/{{ device.id }}/addresses/pin"
+                          hx-target="#addresses-body" hx-swap="innerHTML">
+                        <input type="hidden" name="interface" value="{{ a.interface }}">
+                        <input type="hidden" name="address" value="{{ a.address }}">
+                        <input type="hidden" name="dynamic" value="{{ '1' if a.dynamic else '0' }}">
+                        <button type="submit" class="button-ghost button-sm">Ustaw jako główny</button>
+                    </form>
+                    {% endif %}
+                </td>
+                {% endif %}
+            </tr>
+            {% else %}
+            <tr><td colspan="{{ 6 if can_pin else 5 }}" class="empty">Urządzenie nie zwróciło żadnych adresów.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<p class="hint">Adres główny wskazujesz sam — portal go nie zgaduje, bo przy switchu bez
+serwera DHCP i przy wielu VLAN-ach każda automatyka prędzej czy później wskazałaby zły.
+Adres <b>dynamiczny</b> śledzimy po interfejsie (wartość ma się zmieniać), <b>statyczny</b>
+po parze interfejs + adres.</p>
+
+{# Podmiana poza celem: naglowek sekcji renderuje sie z bazy, wiec po przypieciu musi
+   zobaczyc nowa wartosc bez przeladowania strony. #}
+<span id="status-local-addr" hx-swap-oob="true">
+    {%- if r.pinned.value %}<code>{{ r.pinned.value }}</code>
+    {%- if r.pinned.dynamic %} <span class="pill pill-idle">dyn</span>{% endif %}
+    {%- elif r.pinned.interface %}<span class="empty">czekam na adres ({{ r.pinned.interface }})</span>
+    {%- else %}<span class="empty">niewskazany</span>
+    {%- endif %}
+</span>
+<span id="status-public-addr" hx-swap-oob="true">
+    {%- if r.pinned.public_address %}<code>{{ r.pinned.public_address }}</code>
+    {%- if r.pinned.behind_nat %} <span class="pill pill-warn">za NAT</span>
+    {%- elif r.pinned.behind_nat is not none %} <span class="pill pill-ok">bezpośredni</span>{% endif %}
+    {%- else %}<span class="empty">—</span>{% endif %}
+</span>
+{% endif %}

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Logowanie — MikroTik Manager</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon-180.png">
+    <link rel="preload" href="/static/inter-var-ext.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/fx.js" defer></script>
+</head>
+<body>
+    <canvas id="bg-net" aria-hidden="true"></canvas>
+    <div class="login-wrap">
+        <div class="panel glow-card login-card">
+            <div class="login-brand">
+                <span class="brand-mark">
+                    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="lg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                                <stop offset="0" stop-color="#2ee6ff"/><stop offset="0.55" stop-color="#7b8cff"/><stop offset="1" stop-color="#c77dff"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M20 3.5 34 11.5v16L20 36.5 6 27.5v-16z" stroke="url(#lg)" stroke-width="2.2" stroke-linejoin="round"/>
+                        <circle cx="20" cy="20" r="3" fill="url(#lg)"/>
+                        <circle cx="20" cy="9.5" r="1.7" fill="#2ee6ff"/><circle cx="29" cy="16.3" r="1.7" fill="#7b8cff"/><circle cx="11" cy="16.3" r="1.7" fill="#c77dff"/>
+                    </svg>
+                </span>
+                <div>
+                    <div class="brand-name">MikroTik Manager</div>
+                    <div class="login-sub">Zaloguj się, aby kontynuować</div>
+                </div>
+            </div>
+
+            {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+            <form method="post" action="/login">
+                <label for="username">Login</label>
+                <input type="text" id="username" name="username" autofocus autocomplete="username" required>
+
+                <label for="password">Hasło</label>
+                <input type="password" id="password" name="password" autocomplete="current-password" required>
+
+                <p class="form-foot"><button type="submit" style="width:100%;">Zaloguj</button></p>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Nowy tunel — {{ device.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">WireGuard · nowy tunel</span>
+        <h1 class="page-title">{{ device.name }}</h1>
+        <p class="page-sub"><a href="/devices/{{ device.id }}/wireguard">← wróć do monitora</a></p>
+    </div>
+</div>
+
+{% if reason %}
+<p class="error">{{ reason }}</p>
+{% else %}
+{% for e in errors or [] %}<p class="error">{{ e }}</p>{% endfor %}
+
+{% if step == "form" %}
+<form method="post" action="/devices/{{ device.id }}/wireguard/new/preview">
+<section class="panel glow-card" style="max-width:860px;">
+    <div class="panel-head"><h2>Interfejs</h2></div>
+    <div class="form-grid-2">
+        <div>
+            <label for="name">Nazwa</label>
+            <input type="text" id="name" name="name" value="{{ t.name }}" required maxlength="40">
+        </div>
+        <div>
+            <label for="port">Port (UDP)</label>
+            <input type="number" id="port" name="port" value="{{ t.port }}" min="1" max="65535" required
+                   placeholder="wysoki, nietypowy">
+            {% if used_ports %}<p class="hint" style="margin:0.2rem 0 0;">zajęte: {{ used_ports | sort | join(", ") }}</p>{% endif %}
+        </div>
+        <div>
+            <label for="network">Podsieć tunelu</label>
+            <input type="text" id="network" name="network" value="{{ t.network or '' }}" required placeholder="np. 10.20.30.0/24">
+            <p class="hint" style="margin:0.2rem 0 0;">serwer dostaje pierwszy adres, klienci kolejne</p>
+        </div>
+    </div>
+    <p class="hint">Klucz serwera wygeneruje router. Sprawdzę kolizję nazwy, portu i podsieci
+    z adresami routera.</p>
+
+    <label style="display:flex; align-items:center; gap:0.4rem;">
+        <input type="checkbox" name="firewall" value="1" {% if t.firewall %}checked{% endif %} style="width:auto;">
+        reguła <code>accept</code> dla portu UDP w łańcuchu input
+    </label>
+    <p class="hint" style="margin:0.1rem 0 0.6rem 1.6rem;">Wstawiona <b>przed pierwszą aktywną regułą
+    drop</b> — generator dopisywał ją na koniec, gdzie po regule drop nigdy nie działała.
+    Dokładne miejsce zobaczysz w podglądzie.</p>
+
+    <label style="display:flex; align-items:center; gap:0.4rem;">
+        <input type="checkbox" name="masquerade" value="1" {% if t.masquerade %}checked{% endif %} style="width:auto;">
+        maskarada podsieci tunelu do bridge'a
+    </label>
+    <select name="bridge" style="width:auto; margin:0.2rem 0 0.6rem 1.6rem;">
+        {% for b in bridges | default([]) %}<option value="{{ b }}" {% if b == t.bridge %}selected{% endif %}>{{ b }}</option>
+        {% else %}<option value="">(brak bridge'y)</option>{% endfor %}
+    </select>
+
+    <label style="display:flex; align-items:center; gap:0.4rem;">
+        <input type="checkbox" name="iflist" value="1" {% if t.iflist %}checked{% endif %} style="width:auto;">
+        dodaj interfejs do listy interfejsów
+    </label>
+    <select name="list_name" style="width:auto; margin:0.2rem 0 0.6rem 1.6rem;">
+        {% for x in lists | default([]) %}<option value="{{ x }}" {% if x == t.list_name %}selected{% endif %}>{{ x }}</option>
+        {% else %}<option value="">(brak własnych list)</option>{% endfor %}
+    </select>
+</section>
+
+<section class="panel glow-card" style="max-width:860px;">
+    <div class="panel-head"><h2>Peery</h2></div>
+    {% include "routerwg/_peer_params.html" %}
+    <p class="form-foot"><button type="submit">Podgląd</button></p>
+</section>
+</form>
+
+{% elif step == "preview" %}
+<section class="panel glow-card" style="max-width:860px;">
+    <div class="panel-head"><h2>Podgląd — nic jeszcze nie zostało zapisane</h2></div>
+    <ol style="margin-top:0; line-height:1.8;">
+        <li>interfejs <code>{{ t.name }}</code> na porcie <b>{{ t.port }}</b>, klucz wygeneruje router</li>
+        <li>adres <code>{{ t.network.network_address + 1 }}/{{ t.network.prefixlen }}</code></li>
+        {% if t.firewall %}
+        <li>reguła <code>accept</code> UDP {{ t.port }} w input —
+            {% if drop %}<b>przed</b> regułą <code>{{ drop.action }}</code> {{ drop['.id'] }}
+                {% if drop.comment %}(„{{ drop.comment }}”){% endif %}
+            {% else %}na końcu łańcucha (router nie ma aktywnej reguły drop w input){% endif %}</li>
+        {% endif %}
+        {% if t.masquerade %}<li>maskarada <code>{{ t.network }}</code> → <code>{{ t.bridge }}</code></li>{% endif %}
+        {% if t.iflist %}<li>członkostwo w liście <code>{{ t.list_name }}</code></li>{% endif %}
+        {% if hosts %}<li>{{ hosts | length }} {{ plural(hosts | length, "peer", "peery", "peerów") }}:
+            <code>{{ hosts | join(", ") }}</code></li>{% endif %}
+    </ol>
+    <form method="post" action="/devices/{{ device.id }}/wireguard/new/apply"
+          onsubmit="this.querySelector('button[type=submit]').disabled = true;">
+        {% for k in ("name", "port") %}<input type="hidden" name="{{ k }}" value="{{ t[k] }}">{% endfor %}
+        <input type="hidden" name="network" value="{{ t.network }}">
+        <input type="hidden" name="bridge" value="{{ t.bridge }}">
+        <input type="hidden" name="list_name" value="{{ t.list_name }}">
+        <input type="hidden" name="drop_id" value="{{ drop['.id'] if drop else '' }}">
+        {% for k in ("firewall", "masquerade", "iflist") %}{% if t[k] %}<input type="hidden" name="{{ k }}" value="1">{% endif %}{% endfor %}
+        {% for k in ("count", "prefix", "endpoint", "dns", "client_allowed", "keepalive") %}
+        <input type="hidden" name="{{ k }}" value="{{ p[k] }}">
+        {% endfor %}
+        {% if p.psk %}<input type="hidden" name="psk" value="1">{% endif %}
+        {% if p.responder %}<input type="hidden" name="responder" value="1">{% endif %}
+        <p class="hint">Przed zapisem zrobię zrzut. Przy zatwierdzeniu sprawdzę jeszcze raz kolizje
+        i miejsce w firewallu — jeśli coś się zmieniło, niczego nie zapiszę.</p>
+        <p class="form-foot"><button type="submit">Utwórz tunel na routerze</button></p>
+    </form>
+</section>
+
+{% elif step == "done" %}
+<section class="panel glow-card" style="max-width:860px;">
+    <div class="panel-head"><h2>Wynik</h2></div>
+    <ul style="margin-top:0; line-height:1.8;">
+        {% for line in report %}<li class="{{ 'error' if line.startswith('BŁĄD') else '' }}">{{ line }}</li>{% endfor %}
+    </ul>
+    {% set iface_name = t.name %}
+    {% include "routerwg/_results.html" %}
+    <p class="form-foot"><a href="/devices/{{ device.id }}/wireguard?iface={{ t.name | urlencode }}">Otwórz tunel w monitorze →</a></p>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

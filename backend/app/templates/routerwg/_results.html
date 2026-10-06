@@ -1,0 +1,35 @@
+{# Wynik dodawania peerow — wspolny dla obu kreatorow. Bez cofania przy bledzie:
+   usuwanie jest poza zakresem, wiec raport musi jasno mowic, co zostalo dodane. #}
+{% set added = results | selectattr("ok") | list %}
+{% set failed = results | rejectattr("ok") | list %}
+{% if results %}
+<p class="{{ 'notice' if not failed else 'error' }}" style="margin-top:0;">
+    Dodano {{ added | length }} z {{ results | length }} peerów{% if failed %} — przerwane na pierwszym błędzie,
+    bez cofania tego, co już dodane{% endif %}.
+</p>
+<div class="table-wrap table-fit">
+    <table>
+        <thead><tr><th>Nazwa</th><th>Adres</th><th>Klucz</th><th>Wynik</th></tr></thead>
+        <tbody>
+        {% for x in results %}
+        <tr>
+            <td><b>{{ x.name }}</b></td>
+            <td><code>{{ x.ip }}</code></td>
+            <td>{% if x.ok and x.has_key %}<span class="pill pill-ok">jest</span>
+                {% elif x.ok %}<span class="pill pill-warn">brak</span>{% else %}<span class="empty">—</span>{% endif %}</td>
+            <td>{% if x.ok %}<span class="pill pill-ok">dodany</span>
+                {% else %}<span class="pill pill-bad">błąd</span> {{ x.error }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if ok_ids %}
+<p class="form-foot" style="margin-top:1rem;">
+    <a class="button" style="text-decoration:none;"
+       href="/devices/{{ device.id }}/wireguard/zip?iface={{ iface_name | urlencode }}&ids={{ ok_ids | urlencode }}">Pobierz ZIP (configi + kody QR)</a>
+</p>
+<p class="hint">ZIP powstaje ze świeżego odczytu routera — portal nie przechowuje kluczy nowych
+peerów. Pojedyncze configi otworzysz też w każdej chwili z monitora.</p>
+{% endif %}
+{% endif %}

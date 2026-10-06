@@ -1,0 +1,28 @@
+{% if h.ok %}
+{% if h.interfaces %}
+<div class="table-wrap table-fit">
+    <table>
+        <thead><tr><th>Interfejs</th><th>Opis</th><th>Typ</th><th>Stan</th><th>Prędkość</th><th>MTU</th><th>RX</th><th>TX</th></tr></thead>
+        <tbody>
+            {% for i in h.interfaces %}
+            <tr>
+                <td>{{ i.name }}</td>
+                <td>{% if i.comment %}{{ i.comment }}{% else %}<span class="empty">—</span>{% endif %}</td>
+                <td class="empty">{{ i.type }}</td>
+                <td>{% if i.disabled %}<span class="pill pill-idle">wyłączony</span>{% elif i.running %}<span class="pill pill-ok"><span class="dot"></span>up</span>{% else %}<span class="pill pill-bad">down</span>{% endif %}</td>
+                <td>{% if i.rate %}<span class="pill pill-info">{{ i.rate }}</span>{% else %}<span class="empty">—</span>{% endif %}</td>
+                <td>{{ i.mtu }}</td>
+                <td>{{ i.rx_byte | humanbytes }}</td>
+                <td>{{ i.tx_byte | humanbytes }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">Urządzenie nie zwróciło listy interfejsów.</div>
+{% endif %}
+{% else %}
+<div class="empty-state" title="{{ h.error }}">Nie udało się pobrać interfejsów — urządzenie nieosiągalne przez API.
+    {% if h.error %}<br><span class="hint">{{ h.error }}</span>{% endif %}</div>
+{% endif %}

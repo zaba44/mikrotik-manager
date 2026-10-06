@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Moje konto — MikroTik Manager{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Konto</span>
+        <h1 class="page-title">{{ request.state.user.username }}</h1>
+        <p class="page-sub">{{ "Administrator" if request.state.user.role == 'admin' else "Operator" }}</p>
+    </div>
+</div>
+
+{% if ok %}<p class="notice">Hasło zmienione.</p>{% endif %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<section class="panel glow-card" style="max-width: 480px;">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Zmień hasło
+        </h2>
+    </div>
+    <form method="post" action="/account/password">
+        <label for="current_password">Aktualne hasło</label>
+        <input type="password" id="current_password" name="current_password" required autocomplete="current-password">
+
+        <label for="new_password">Nowe hasło</label>
+        <input type="password" id="new_password" name="new_password" required autocomplete="new-password">
+
+        <label for="confirm_password">Powtórz nowe hasło</label>
+        <input type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password">
+
+        <p class="form-foot"><button type="submit">Zmień hasło</button></p>
+    </form>
+</section>
+{% endblock %}

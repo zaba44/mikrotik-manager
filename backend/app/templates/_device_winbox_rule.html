@@ -1,0 +1,18 @@
+{% if peers %}
+<p class="hint">Reguła otwiera Winbox tego routera ({% if device.routeros_winbox_port %}port
+    <span class="chip">{{ device.routeros_winbox_port }}</span> odczytany przez API{% else %}port
+    nieznany — wstawiono domyślny 8291{% endif %}) dla {{ peers | length }} komputer{{ 'a' if peers | length == 1 else 'ów' }}
+    administracyjnych, wyłącznie przez tunel. Portal <b>niczego nie wysyła na router</b> — wklej sam
+    i ustaw regułę w miejscu, które pasuje do firewalla tego urządzenia. Nazwę listy
+    (<code>mtm-admin</code>) możesz podmienić na swoją istniejącą, np. <code>white_list</code>.</p>
+<div class="code-block">
+    <div class="code-head">
+        <span>reguła Winbox · Winbox / SSH</span>
+        <button type="button" class="copy-btn">Kopiuj</button>
+    </div>
+    <pre>{{ script }}</pre>
+</div>
+{% else %}
+<div class="empty-state">Brak peerów administracyjnych — dodaj je w
+    <a href="/settings/admin-peers">Ustawieniach</a>, wtedy portal wygeneruje tu gotową regułę.</div>
+{% endif %}

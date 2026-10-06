@@ -1,0 +1,66 @@
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>Config: {{ user.name }}</h2>
+        <span class="sec-summary">{{ (user['client-address'] or '').split(',')[0] }}</span>
+        <button type="button" class="button-ghost button-sm"
+                onclick="document.getElementById('bth-config').innerHTML = ''">Zamknij</button>
+    </div>
+
+    {# Zmiana trybu albo podsieci przeladowuje to okno — przerobka dzieje sie na serwerze,
+       z configu swiezo odczytanego z routera. #}
+    <form hx-get="/devices/{{ device.id }}/bth/config" hx-target="#bth-config" hx-swap="innerHTML"
+          hx-trigger="change" class="bare" style="margin-bottom:0.9rem;">
+        <input type="hidden" name="uid" value="{{ user['.id'] }}">
+        <div style="display:flex; gap:1.2rem; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:0.35rem; margin:0;">
+                <input type="radio" name="mode" value="full" {% if mode == 'full' %}checked{% endif %} style="width:auto;">
+                cały ruch przez tunel (config z routera)
+            </label>
+            <label style="display:flex; align-items:center; gap:0.35rem; margin:0;">
+                <input type="radio" name="mode" value="lan" {% if mode == 'lan' %}checked{% endif %} style="width:auto;">
+                tylko sieć lokalna
+            </label>
+        </div>
+        {% if mode == 'lan' %}
+        <input type="hidden" name="picked" value="1">
+        <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-top:0.6rem;">
+            {% for net in lan_subnets %}
+            <label style="display:flex; align-items:center; gap:0.35rem; margin:0;">
+                <input type="checkbox" name="subnets" value="{{ net }}" {% if net in chosen %}checked{% endif %} style="width:auto;">
+                <code>{{ net }}</code>
+            </label>
+            {% else %}
+            <span class="empty">Router nie ma prywatnych podsieci poza WireGuardem.</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </form>
+
+    {% for w in warnings %}<p class="notice" style="margin-top:0;">{{ w }}</p>{% endfor %}
+
+    <form method="post" action="/devices/{{ device.id }}/wireguard/download" class="wg-config-grid">
+        <input type="hidden" name="name" value="bth-{{ user.name }}{% if mode == 'lan' %}-lan{% endif %}">
+        <div class="code-block" style="margin:0;">
+            <div class="code-head">
+                <span>config klienta · edytowalny</span>
+                <button type="button" class="copy-btn">Kopiuj</button>
+            </div>
+            <textarea name="text" rows="17" spellcheck="false" class="wg-config-text"
+                      hx-post="/devices/{{ device.id }}/wireguard/qr"
+                      hx-trigger="input changed delay:400ms"
+                      hx-target="#bth-qr" hx-swap="innerHTML">{{ text }}</textarea>
+        </div>
+        <div>
+            <div id="bth-qr" class="wg-qr">{{ qr_svg | safe }}</div>
+            <div class="head-tools" style="gap:0.5rem; margin-top:0.8rem; justify-content:center;">
+                <button type="submit" name="fmt" value="conf" class="button-sm">Zapisz .conf</button>
+                <button type="submit" name="fmt" value="png" class="button-ghost button-sm">Zapisz PNG</button>
+            </div>
+        </div>
+    </form>
+
+    <p class="hint">{% if mode == 'lan' %}Przeróbka „tylko sieć lokalna": usunięty peer-atrapa,
+    zostawiony tylko adres IPv4, bez DNS i bez stałego portu, a AllowedIPs ograniczone do
+    zaznaczonych podsieci. Router tej wersji nie przechowuje — powstaje tutaj.
+    {% else %}Config dokładnie taki, jaki zwraca router.{% endif %}</p>
+</section>

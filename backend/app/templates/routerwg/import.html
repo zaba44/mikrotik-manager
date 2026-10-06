@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Uzupełnij z plików .conf — {{ device.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">WireGuard · uzupełnianie z plików .conf</span>
+        <h1 class="page-title">{{ device.name }}{% if iface %} <span class="chip">{{ iface.name }}</span>{% endif %}</h1>
+        <p class="page-sub"><a href="/devices/{{ device.id }}/wireguard{% if iface %}?iface={{ iface.name | urlencode }}{% endif %}">← wróć do monitora</a></p>
+    </div>
+</div>
+
+{% if reason %}<p class="error">{{ reason }}</p>{% endif %}
+{% for e in errors or [] %}<p class="error">{{ e }}</p>{% endfor %}
+{% if notes %}<p class="notice">{% for n in notes %}{{ n }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>{% endif %}
+
+{% if not reason and step == "form" and iface %}
+<section class="panel glow-card" style="max-width:860px;">
+    <div class="panel-head"><h2>Wgraj configi klientów</h2>
+        <span class="sec-summary">{{ peer_count }} peerów · {{ missing }} bez klucza albo endpointu</span></div>
+    <p class="hint" style="margin-top:0;">Pliki <code>.conf</code> albo ZIP z nimi, czytane w pamięci.
+    Z każdego pliku uzupełnię <b>wyłącznie pola informacyjne</b> peera (client-address, DNS,
+    endpoint, keepalive, ListenPort{% if r.level == 'full' %}, AllowedIPs{% endif %}) oraz klucz
+    prywatny, gdy router go nie ma. Kluczy publicznych, PSK, allowed-address ani nazw
+    i komentarzy nie zmieniam.</p>
+    <form method="post" action="/devices/{{ device.id }}/wireguard/import/preview" enctype="multipart/form-data">
+        <input type="hidden" name="iface" value="{{ iface.name }}">
+        <input type="file" name="files" accept=".conf,.zip" multiple required>
+        <div style="margin-top:0.9rem;">
+            <label style="display:flex; align-items:center; gap:0.4rem;">
+                <input type="radio" name="mode" value="fill" checked style="width:auto;">
+                uzupełnij tylko puste pola
+            </label>
+            <label style="display:flex; align-items:center; gap:0.4rem;">
+                <input type="radio" name="mode" value="overwrite" style="width:auto;">
+                nadpisz wartościami z plików
+            </label>
+        </div>
+        <p class="form-foot"><button type="submit">Podgląd</button></p>
+    </form>
+    <p class="hint">Plik trafia do peera tylko wtedy, gdy zgadzają się trzy rzeczy naraz: klucz
+    serwera w pliku = klucz tego interfejsu, klucz klienta = klucz peera (z „## PublicKey"
+    albo wyliczony z PrivateKey) i adres z pliku = wpis /32 peera. Klucz prywatny zapiszę
+    wyłącznie wtedy, gdy matematycznie pasuje do klucza publicznego peera — inaczej router
+    po cichu podmieniłby klucz peera i odciął klienta.</p>
+</section>
+
+{% elif step == "preview" %}
+{% set n_apply = items | selectattr("status", "equalto", "apply") | list | length %}
+{% set n_conf = items | selectattr("status", "equalto", "conflict") | list | length %}
+<section class="panel glow-card">
+    <div class="panel-head"><h2>Podgląd — nic jeszcze nie zostało zapisane</h2>
+        <span class="sec-summary">{{ items | length }} plików · <b>{{ n_apply }}</b> do zapisu
+            {% if n_conf %} · <span class="pill pill-bad">{{ n_conf }} konfliktów</span>{% endif %}
+            · tryb: {{ "nadpisz" if overwrite else "tylko puste" }}</span></div>
+    <div class="table-wrap">
+        <table class="sortable" id="import-plan">
+            <thead><tr><th data-sort="text">Plik</th><th data-sort="text">Peer</th><th data-sort="text">Wynik</th>
+                <th>Zmiany</th><th>Uwagi</th></tr></thead>
+            <tbody>
+            {% for x in items %}
+            <tr>
+                <td><b>{{ x.label }}</b>{% if x.label != x.file %}<br><span class="empty">{{ x.file }}</span>{% endif %}</td>
+                <td>{% if x.peer %}{{ x.peer.display_name }}<br><code>{{ x.peer.host_ip or '—' }}</code>{% else %}<span class="empty">—</span>{% endif %}</td>
+                <td>
+                    {% if x.status == 'apply' %}<span class="pill pill-ok">zapiszę</span>
+                    {% elif x.status == 'conflict' %}<span class="pill pill-bad">konflikt</span>
+                    {% else %}<span class="pill pill-idle">pomijam</span>{% endif %}
+                </td>
+                <td>{% for k, v in display(x.changes) %}<code>{{ k }}</code> → {{ v }}{% if not loop.last %}<br>{% endif %}{% else %}<span class="empty">—</span>{% endfor %}</td>
+                <td>{% for n in x.notes %}{{ n }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if n_apply %}
+    <form method="post" action="/devices/{{ device.id }}/wireguard/import/apply" style="margin-top:1rem;"
+          onsubmit="this.querySelector('button[type=submit]').disabled = true;">
+        <input type="hidden" name="token" value="{{ token }}">
+        <p class="hint">Przed zapisem zrobię zrzut peerów interfejsu. Przy zatwierdzeniu policzę plan
+        od nowa na świeżym odczycie routera — zapiszę to, co wynika z jego aktualnego stanu.
+        Podgląd jest ważny 15 minut.</p>
+        <p class="form-foot"><button type="submit">Zapisz {{ n_apply }} {{ plural(n_apply, "peera", "peery", "peerów") }} na routerze</button></p>
+    </form>
+    {% else %}
+    <p class="notice">Nie ma czego zapisywać.</p>
+    {% endif %}
+</section>
+
+{% elif step == "done" %}
+{% set ok_n = report | selectattr("ok") | list | length %}
+<section class="panel glow-card">
+    <div class="panel-head"><h2>Wynik</h2>
+        <span class="sec-summary">zapisano {{ ok_n }} z {{ report | length }}</span></div>
+    {% if report %}
+    <div class="table-wrap table-fit">
+        <table>
+            <thead><tr><th>Plik</th><th>Peer</th><th>Pola</th><th>Wynik</th></tr></thead>
+            <tbody>
+            {% for e in report %}
+            <tr>
+                <td>{{ e.label }}</td><td>{{ e.peer }}</td>
+                <td>{{ e.fields | join(", ") }}</td>
+                <td>{% if e.ok %}<span class="pill pill-ok">zapisano</span>
+                    {% else %}<span class="pill pill-bad">błąd</span> {{ e.error }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="notice" style="margin-top:0;">Na świeżym odczycie routera nie było już nic do zapisania.</p>{% endif %}
+    {% if skipped %}
+    <p class="hint">Pominięte albo z konfliktem: {{ skipped | length }} (szczegóły były w podglądzie).</p>
+    {% endif %}
+    <p class="form-foot"><a href="/devices/{{ device.id }}/wireguard?iface={{ iface.name | urlencode }}">Otwórz interfejs w monitorze →</a></p>
+</section>
+{% endif %}
+{% endblock %}

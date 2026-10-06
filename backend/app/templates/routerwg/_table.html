@@ -1,0 +1,82 @@
+{# Odswiezanie podmienia CALE opakowanie (outerHTML), a nie sam <tbody>. Odpowiedz zaczynajaca
+   sie od <tbody> htmx parsuje w trybie tabeli i dolaczony licznik (element spoza tabeli)
+   moglby zostac wyrzucony przy parsowaniu. Opakowanie niesie odpytywanie, wiec nowa wersja
+   musi miec te same atrybuty. Warunek w nawiasie wstrzymuje odswiezanie po odznaczeniu
+   „odswiezaj" — np. zeby spokojnie przeczytac wiersz.
+   Kolejnosc sortowania przywraca sortable.js, a filtr — filter.js, oba po podmianie. #}
+<div id="wg-table-wrap" class="table-wrap"
+     hx-get="/devices/{{ device.id }}/wireguard/table?iface={{ iface.name | urlencode if iface else '' }}"
+     hx-trigger="every 15s [document.getElementById('wg-auto') && document.getElementById('wg-auto').checked], wg-refresh from:body"
+     hx-swap="outerHTML">
+    <table id="wg-peers" class="sortable wg-table">
+        <thead><tr>
+            <th data-sort="number">Stan</th>
+            <th data-sort="text">Nazwa</th>
+            <th data-sort="text">Komentarz</th>
+            <th data-sort="number">Adres</th>
+            <th data-sort="number">Trasy</th>
+            <th data-sort="text">Endpoint</th>
+            <th data-sort="number">Handshake</th>
+            <th data-sort="number">RX</th>
+            <th data-sort="number">TX</th>
+            <th data-sort="number">Klucz</th>
+            <th data-sort="text">Typ</th>
+            {% if is_admin %}<th></th>{% endif %}
+        </tr></thead>
+        <tbody>
+        {% if not r.ok %}
+            <tr><td colspan="12" class="error">Odświeżenie nie powiodło się: {{ r.error }}</td></tr>
+        {% else %}
+        {% for p in peers %}
+            <tr class="wg-row{% if p.disabled %} wg-disabled{% endif %}">
+                <td data-sort-value="{{ {'active': 0, 'idle': 1, 'never': 2}[p.status] + (10 if p.disabled else 0) }}">
+                    {% if p.status == 'active' %}<span class="pill pill-ok"><span class="dot"></span>aktywny</span>
+                    {% elif p.status == 'idle' %}<span class="pill pill-idle">nieaktywny</span>
+                    {% else %}<span class="empty">nigdy</span>{% endif %}
+                    {% if p.disabled %}<br><span class="pill pill-bad">wyłączony</span>{% endif %}
+                </td>
+                <td>
+                    {{ p.name or "—" }}
+                    {% if p.about %}<br><span class="pill pill-warn" title="Ostrzeżenie RouterOS">{{ p.about }}</span>{% endif %}
+                </td>
+                <td>{% if p.comment %}{{ p.comment }}{% else %}<span class="empty">—</span>{% endif %}</td>
+                <td data-sort-value="{{ p.host_sort }}">{% if p.host_ip %}<code>{{ p.host_ip }}</code>{% else %}<span class="empty">—</span>{% endif %}</td>
+                <td data-sort-value="{{ p.routes | length }}">
+                    {% if p.routes %}<span class="chip" title="{{ p.routes | join(', ') }}">+{{ p.routes | length }} {{ "trasa" if p.routes | length == 1 else "tras" }}</span>
+                    {% else %}<span class="empty">—</span>{% endif %}
+                </td>
+                <td>{% if p.current_endpoint %}<code>{{ p.current_endpoint }}</code>{% else %}<span class="empty">—</span>{% endif %}</td>
+                <td data-sort-value="{{ p.handshake if p.handshake is not none else 999999999 }}">{{ format_ago(p.handshake) }}</td>
+                <td data-sort-value="{{ p.rx }}">{{ p.rx | humanbytes }}</td>
+                <td data-sort-value="{{ p.tx }}">{{ p.tx | humanbytes }}</td>
+                <td data-sort-value="{{ 1 if p.has_private_key else 0 }}">
+                    {% if p.has_private_key %}<span class="pill pill-ok">tak</span>{% else %}<span class="empty">brak</span>{% endif %}
+                </td>
+                <td>
+                    {% if p.kind == 'uplink' %}<span class="chip">uplink</span>
+                    {% elif p.kind == 'site' %}<span class="chip">site-to-site</span>
+                    {% else %}<span class="empty">klient</span>{% endif %}
+                </td>
+                {% if is_admin %}
+                <td style="text-align:right; white-space:nowrap;">
+                    <button type="button" class="button-ghost button-sm" title="Edytuj komentarz"
+                            hx-get="/devices/{{ device.id }}/wireguard/comment?iface={{ iface.name | urlencode }}&pid={{ p.id | urlencode }}"
+                            hx-target="#wg-comment" hx-swap="innerHTML"
+                            hx-on::after-request="document.getElementById('wg-comment').scrollIntoView({behavior: 'smooth', block: 'center'})">✎</button>
+                    <button type="button" class="button-ghost button-sm"
+                            hx-get="/devices/{{ device.id }}/wireguard/config?iface={{ iface.name | urlencode }}&pid={{ p.id | urlencode }}"
+                            hx-target="#wg-config" hx-swap="innerHTML"
+                            hx-on::after-request="document.getElementById('wg-config').scrollIntoView({behavior: 'smooth', block: 'start'})">Config</button>
+                </td>
+                {% endif %}
+            </tr>
+        {% else %}
+            <tr><td colspan="12" class="empty">Ten interfejs nie ma peerów.</td></tr>
+        {% endfor %}
+        {% endif %}
+        </tbody>
+    </table>
+</div>
+{% if oob %}
+<span id="wg-counter" class="sec-summary" style="margin-left:0;" hx-swap-oob="true">{% include "routerwg/_counter.html" %}</span>
+{% endif %}

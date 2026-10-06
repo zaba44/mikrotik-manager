@@ -1,0 +1,47 @@
+{# Wspolne pola nowych peerow — w dodawaniu do istniejacego interfejsu i w nowym tunelu. #}
+<div class="form-grid-2">
+    <div>
+        <label for="count">Liczba peerów</label>
+        <input type="number" id="count" name="count" min="0" max="250" value="{{ p.count }}" required>
+    </div>
+    <div>
+        <label for="prefix">Prefiks nazwy</label>
+        <input type="text" id="prefix" name="prefix" value="{{ p.prefix }}" maxlength="32">
+        <p class="hint" style="margin:0.2rem 0 0;">nazwa = komentarz = prefiks + ostatni oktet, np. {{ p.prefix }}5</p>
+    </div>
+    <div>
+        <label for="endpoint">Adres serwera (client-endpoint)</label>
+        <input type="text" id="endpoint" name="endpoint" value="{{ p.endpoint }}" placeholder="vpn.firma.pl albo IP">
+        {% if endpoint_choices %}
+        <div class="endpoint-picks">
+            {% for label, value in endpoint_choices %}
+            <button type="button" class="button-ghost button-sm" data-fill="{{ value }}"
+                    onclick="document.getElementById('endpoint').value = this.dataset.fill">{{ label }}: {{ value }}</button>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <p class="hint" style="margin:0.2rem 0 0;">sam host, bez portu — port to listen-port interfejsu.
+        Przyciski wpisują adres z routera; pole możesz dalej zmienić ręcznie.</p>
+    </div>
+    <div>
+        <label for="dns">DNS klienta (opcjonalnie)</label>
+        <input type="text" id="dns" name="dns" value="{{ p.dns }}" placeholder="np. 192.168.88.1">
+    </div>
+    <div>
+        <label for="client_allowed">AllowedIPs klienta (opcjonalnie)</label>
+        <input type="text" id="client_allowed" name="client_allowed" value="{{ p.client_allowed }}"
+               placeholder="puste = tylko adres serwera /32">
+    </div>
+    <div>
+        <label for="keepalive">Keepalive klienta (s)</label>
+        <input type="number" id="keepalive" name="keepalive" min="0" max="3600" value="{{ p.keepalive }}">
+    </div>
+</div>
+<label style="display:flex; align-items:center; gap:0.4rem;">
+    <input type="checkbox" name="psk" value="1" {% if p.psk %}checked{% endif %} style="width:auto;">
+    PreSharedKey (32 losowe bajty na peera)
+</label>
+<label style="display:flex; align-items:center; gap:0.4rem;">
+    <input type="checkbox" name="responder" value="1" {% if p.responder %}checked{% endif %} style="width:auto;">
+    responder=yes (router tylko odpowiada, nie inicjuje połączenia)
+</label>

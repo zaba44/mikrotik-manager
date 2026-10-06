@@ -1,0 +1,18 @@
+<tr id="ptr-{{ t.id }}">
+    <td>{{ t.label or "—" }}</td>
+    <td><span class="chip">{{ t.ip }}</span></td>
+    <td>{% if result %}{% include "_ping_result.html" %}{% else %}<span class="empty">—</span>{% endif %}</td>
+    <td style="white-space:nowrap;">
+        <span class="actions-row">
+            <button type="button" class="button-ghost button-sm"
+                    hx-post="/devices/{{ device.id }}/ping-targets/{{ t.id }}/test"
+                    hx-target="#ptr-{{ t.id }}" hx-swap="outerHTML"
+                    hx-trigger="click, ping-all from:body"
+                    hx-disabled-elt="this">ping</button>
+            <button type="button" class="button-danger button-sm"
+                    hx-post="/devices/{{ device.id }}/ping-targets/{{ t.id }}/delete"
+                    hx-target="#ptr-{{ t.id }}" hx-swap="outerHTML"
+                    hx-confirm="Usunąć cel {{ t.ip }}?">usuń</button>
+        </span>
+    </td>
+</tr>

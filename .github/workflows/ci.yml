@@ -1,0 +1,32 @@
+name: Testy i audyt zaleznosci
+
+# Przy kazdym pushu i PR, a takze jako bramka przed wydaniem (release.yml wola ten
+# workflow przez workflow_call — obrazy nie powstana, jesli testy albo audyt padna).
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_call:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Zaleznosci
+        run: pip install -r backend/requirements.txt pytest pip-audit
+
+      - name: Testy (czysta logika, bez bazy i sprzetu)
+        working-directory: backend
+        run: python -m pytest tests -q
+
+      # Znane podatnosci w przypietych wersjach. Celowo bramka, nie ostrzezenie: recenzja
+      # zewnetrzna (2026-10-03) znalazla jedna, audyt — 25 w pieciu pakietach.
+      - name: Audyt podatnosci
+        run: pip-audit -r backend/requirements.txt --progress-spinner off

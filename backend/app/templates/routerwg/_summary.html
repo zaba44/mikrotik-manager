@@ -1,0 +1,31 @@
+{% if not r.ok %}
+<p class="error" style="margin:0;">Nie udało się odczytać WireGuarda: {{ r.error }}</p>
+{% elif r.level == SUPPORT_NONE %}
+<div class="empty-state">RouterOS {{ r.version }} — moduł WireGuard wymaga 7.15 lub nowszego.</div>
+{% elif not interfaces %}
+<div class="empty-state">Brak interfejsów WireGuard.</div>
+{% else %}
+<div class="table-wrap table-fit">
+    <table>
+        <thead><tr><th>Interfejs</th><th>Adres</th><th>Port</th><th>Aktywnych</th><th>Rola</th></tr></thead>
+        <tbody>
+            {% for i in interfaces %}
+            <tr>
+                <td><a href="/devices/{{ device.id }}/wireguard?iface={{ i.name | urlencode }}"><code>{{ i.name }}</code></a></td>
+                <td>{% if i.tunnel %}{{ i.tunnel }}{% else %}<span class="empty">—</span>{% endif %}</td>
+                <td class="empty">{{ i.listen_port or "—" }}</td>
+                <td><b>{{ counts[i.name][0] }}</b> / {{ counts[i.name][1] }}</td>
+                <td>
+                    {% if i.carries_manager %}<span class="pill pill-info">tunel portalu</span>
+                    {% elif i.router_is_client %}<span class="pill pill-idle">klient</span>
+                    {% else %}<span class="pill pill-ok">serwer</span>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p class="form-foot" style="margin-top:0.8rem;">
+    <a href="/devices/{{ device.id }}/wireguard" class="button button-sm" style="text-decoration:none;">Otwórz monitor WireGuard</a>
+</p>
+{% endif %}

@@ -1,0 +1,19 @@
+{% if h.ok %}
+<dl class="kv-grid">
+    <div class="kv"><dt>CPU</dt><dd>{{ h.cpu_load }}%{% if h.cpu_count %} <span class="empty">({{ h.cpu_count }} rdz.)</span>{% endif %}</dd></div>
+    <div class="kv"><dt>RAM</dt><dd>{{ (h.total_memory - h.free_memory) | humanbytes }} / {{ h.total_memory | humanbytes }}{% if h.total_memory %} <span class="empty">({{ ((h.total_memory - h.free_memory) / h.total_memory * 100) | round | int }}%)</span>{% endif %}</dd></div>
+    <div class="kv"><dt>Dysk</dt><dd>{{ (h.total_hdd - h.free_hdd) | humanbytes }} / {{ h.total_hdd | humanbytes }}</dd></div>
+    {# Czujniki sprzętowe — tylko modele, które je mają (mAP lite / hAP ac2 nie mają). #}
+    {% for s in h.sensors %}
+    <div class="kv"><dt>{{ s.label }}</dt><dd>
+        {% if s.level == 'bad' %}<span class="pill pill-bad">{{ s.value }} °C</span>
+        {% elif s.level == 'warn' %}<span class="pill pill-warn">{{ s.value }} °C</span>
+        {% elif s.unit == 'C' %}{{ s.value }} °C
+        {% elif s.unit %}{{ s.value }} {{ s.unit }}
+        {% else %}{{ s.value }}{% endif %}</dd></div>
+    {% endfor %}
+</dl>
+{% else %}
+<div class="empty-state" title="{{ h.error }}">Nie udało się pobrać kondycji — urządzenie nieosiągalne przez API.
+    {% if h.error %}<br><span class="hint">{{ h.error }}</span>{% endif %}</div>
+{% endif %}

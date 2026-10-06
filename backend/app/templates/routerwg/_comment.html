@@ -1,0 +1,23 @@
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>Komentarz peera</h2>
+        <span class="sec-summary">{{ iface }}{% if peer %} · {{ peer.display_name }}{% endif %}</span>
+        <button type="button" class="button-ghost button-sm"
+                onclick="document.getElementById('wg-comment').innerHTML = ''">Zamknij</button>
+    </div>
+    {% if error %}<p class="error" style="margin-top:0;">{{ error }}</p>{% endif %}
+    {% if notice %}<p class="notice" style="margin-top:0;">{{ notice }}</p>{% endif %}
+    {% if peer %}
+    {# Edycja poza odswiezana tabela: auto-odswiezanie co 15 s skasowaloby wpisywany tekst. #}
+    <form hx-post="/devices/{{ device.id }}/wireguard/comment" hx-target="#wg-comment" hx-swap="innerHTML"
+          hx-confirm="Zapisać komentarz peera {{ peer.display_name }}? Przed zmianą zapisuję zrzut stanu."
+          class="form-inline">
+        <input type="hidden" name="iface" value="{{ iface }}">
+        <input type="hidden" name="pid" value="{{ peer.id }}">
+        <input type="text" name="comment" value="{{ peer.comment }}" style="min-width:22rem;" autofocus>
+        <button type="submit">Zapisz</button>
+    </form>
+    <p class="hint">Komentarz to Twoja notatka — wolno go zmieniać na każdym interfejsie, także
+    na tunelu portalu i uplinkach. Nie wpływa na działanie tunelu.</p>
+    {% endif %}
+</section>

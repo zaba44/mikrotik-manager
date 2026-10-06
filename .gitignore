@@ -1,0 +1,29 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+node_modules/
+dist/
+build/
+*.log
+.DS_Store
+secrets/
+*.pem
+*.key
+*.p12
+*.crt
+
+# Kopie/eksporty portalu — zawierają klucz Fernet i klucz prywatny huba, NIGDY do repo
+migration/
+*.tar.gz
+
+# Mirror certów/eksportów z hosta (nie źródło projektu, zawiera klucze prywatne)
+DEBIAN_192_168_144_66/
+
+# Dziennik prac autora (lab, decyzje, recenzje) — tylko lokalnie, nie publikujemy
+PROJECT_BRIEF.md

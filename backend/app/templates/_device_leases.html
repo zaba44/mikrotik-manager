@@ -1,0 +1,44 @@
+{% set can_operate = request.state.user and (request.state.user.role == 'admin' or (request.state.user.role == 'operator' and not request.state.user.status_only)) %}
+{% if r.ok %}
+{% set statics = r.leases | rejectattr("dynamic") | list %}
+<div class="head-tools" style="justify-content:space-between; margin-bottom:0.7rem;">
+    <span class="hint" style="margin:0; flex:1 1 300px;">{{ r.leases | length }} dzierżaw ({{ statics | length }} statycznych).
+    „Zbadaj statyczne" pinguje wszystkie statyczne — <b>waiting</b> / stare <b>last-seen</b> może oznaczać host
+    z ręcznie wpisanym IP na karcie (nie leasuje), którego ping i tak wykryje.</span>
+    {% if statics and can_operate %}<button type="button" class="button-ghost button-sm" onclick="document.body.dispatchEvent(new Event('ping-static'))">Zbadaj statyczne</button>{% endif %}
+</div>
+{% if r.leases %}
+<div class="table-wrap table-fit">
+    <table>
+        <thead><tr><th>Adres</th><th>Host</th><th>MAC</th><th>Status</th><th>Typ</th><th>Komentarz</th><th>Ostatnio</th>{% if can_operate %}<th>Ping</th>{% endif %}</tr></thead>
+        <tbody>
+            {% for l in r.leases %}
+            <tr>
+                <td><span class="chip">{{ l.address }}</span></td>
+                <td>{{ l.host_name or "—" }}</td>
+                <td class="empty cell-nowrap" style="font-family:var(--mono); font-size:0.76rem;">{{ l.mac or "—" }}</td>
+                <td>{% if l.status == 'bound' %}<span class="pill pill-ok">bound</span>{% else %}<span class="pill pill-idle">{{ l.status or "—" }}</span>{% endif %}</td>
+                <td>{% if l.dynamic %}<span class="empty">dynamiczny</span>{% else %}<span class="pill pill-info">statyczny</span>{% endif %}</td>
+                <td>{{ l.comment or "—" }}</td>
+                <td class="empty">{{ l.last_seen or "—" }}</td>
+                {% if can_operate %}
+                {# Ping działa dla KAŻDEJ dzierżawy; „Zbadaj statyczne" (event ping-static)
+                   łapią tylko statyczne — dynamiczne pinguje się pojedynczo klikiem. #}
+                <td><span id="lease-{{ loop.index }}-res"><button type="button" class="button-ghost button-sm"
+                        hx-post="/devices/{{ device.id }}/ping" hx-vals='{{ {"address": l.address} | tojson }}'
+                        hx-target="#lease-{{ loop.index }}-res" hx-swap="innerHTML"
+                        hx-trigger="click{% if not l.dynamic %}, ping-static from:body{% endif %}"
+                        hx-disabled-elt="this">ping</button></span></td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="empty">Brak dzierżaw — to urządzenie nie prowadzi serwera DHCP.</p>
+{% endif %}
+{% else %}
+<div class="empty-state" title="{{ r.error }}">Nie udało się pobrać dzierżaw — urządzenie nieosiągalne przez API.
+    {% if r.error %}<br><span class="hint">{{ r.error }}</span>{% endif %}</div>
+{% endif %}

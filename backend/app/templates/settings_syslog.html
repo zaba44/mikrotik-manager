@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Syslog — Ustawienia{% endblock %}
+{% block content %}
+{% set active_tab = 'syslog' %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Panel administracyjny</span>
+        <h1 class="page-title">Ustawienia</h1>
+    </div>
+</div>
+
+{% include "_settings_tabs.html" %}
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+
+{% set on = syslog_settings.syslog_enabled == '1' %}
+
+<section class="panel glow-card" style="max-width: 680px;">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H5.2L4 18.5z"/><path d="M8 9h8"/><path d="M8 12.5h5"/></svg>
+            Odbiór zdarzeń (syslog)
+        </h2>
+        {% if on %}<span class="pill pill-ok"><span class="dot"></span>włączony</span>
+        {% else %}<span class="pill pill-idle">wyłączony</span>{% endif %}
+    </div>
+
+    <p class="hint">Urządzenia same wysyłają zdarzenia w chwili powstania — portal ich o to
+    nie odpytuje. Podpięcie konkretnego routera włączasz na jego stronie; ten przełącznik
+    decyduje, czy portal w ogóle przyjmuje i zapisuje wpisy.</p>
+
+    <p class="hint"><b>Wyłączenie działa natychmiast po naszej stronie</b> (odbiornik przestaje
+    zapisywać, przełączniki przy urządzeniach stają się nieaktywne), ale <b>świadomie nie
+    zdejmuje konfiguracji z routerów</b> — przy dużej flocie to setki wywołań, z których część
+    padnie na urządzeniach offline, a taka długa i zawodna operacja nie powinna chować się pod
+    przełącznikiem. Do tego służy osobny przycisk niżej.</p>
+
+    <form method="post" action="/settings/syslog">
+        <label style="display:flex; align-items:center; gap:0.5rem;">
+            <input type="checkbox" name="syslog_enabled" value="1" style="width:auto;" {% if on %}checked{% endif %}>
+            Przyjmuj i zapisuj zdarzenia z urządzeń
+        </label>
+
+        <label for="syslog_retention_days" style="margin-top:1rem;">Retencja — ile dni trzymać wpisy
+            <span class="empty">(0 = bez ograniczeń)</span></label>
+        <input type="number" id="syslog_retention_days" name="syslog_retention_days" min="0"
+               value="{{ syslog_settings.syslog_retention_days }}" required>
+
+        <label for="syslog_max_entries_per_device">Limit wpisów na urządzenie
+            <span class="empty">(0 = bez limitu)</span></label>
+        <input type="number" id="syslog_max_entries_per_device" name="syslog_max_entries_per_device" min="0"
+               value="{{ syslog_settings.syslog_max_entries_per_device }}" required>
+        <p class="hint" style="margin-top:0.3rem;">Drugi bezpiecznik obok retencji: sama retencja
+        czasowa nie chroni przed nagłym zalewem, bo włączony poziom <code>info</code> potrafi dać
+        setki wpisów na dobę z jednego urządzenia, a sprzątanie przyszłoby dopiero po ustawionej
+        liczbie dni. Limit ogranicza najgorszy przypadek niezależnie od tempa.</p>
+
+        <p class="form-foot"><button type="submit">Zapisz</button></p>
+    </form>
+</section>
+
+<section class="panel glow-card" style="max-width: 680px;">
+    <div class="panel-head"><h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+        Stan
+    </h2></div>
+    <dl class="kv-grid">
+        <div class="kv"><dt>Zapisanych wpisów</dt><dd>{{ stats.total }}
+            {% if stats.total %}<span class="empty">(~{{ stats.approx_mb }} MB)</span>{% endif %}</dd></div>
+        <div class="kv"><dt>Urządzeń podpiętych</dt><dd>{{ stats.connected }}</dd></div>
+        <div class="kv"><dt>Z poziomem <code>info</code></dt><dd>
+            {% if stats.with_info %}<span class="pill pill-warn">{{ stats.with_info }}</span>
+            {% else %}0{% endif %}</dd></div>
+        <div class="kv"><dt>Najstarszy wpis</dt><dd>
+            {% if stats.oldest %}{{ stats.oldest.strftime("%Y-%m-%d %H:%M") }}
+            {% else %}<span class="empty">—</span>{% endif %}</dd></div>
+    </dl>
+    {% if stats.with_info %}
+    <p class="hint"><b>{{ stats.with_info }}</b> urządzeń ma włączony poziom <code>info</code>.
+    To najczęstsza przyczyna gwałtownego przyrostu — zostawiaj go tylko na czas diagnostyki.</p>
+    {% endif %}
+    {% if not on and stats.connected %}
+    <p class="hint"><b>{{ stats.connected }} urządzeń nadal ma konfigurację syslogu na routerze</b>
+    i wysyła zdarzenia, których portal nie przyjmuje. Możesz to zostawić (nic złego się nie dzieje)
+    albo posprzątać poniżej.</p>
+    {% endif %}
+</section>
+
+<section class="panel panel-danger" style="max-width: 680px;">
+    <div class="panel-head"><h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="m6 7 1 13a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7"/></svg>
+        Sprzątanie
+    </h2></div>
+
+    <p class="hint">Czyszczenie wpisów usuwa tylko dane zapisane w portalu — urządzenia dalej
+    wysyłają. Sprzątanie routerów działa odwrotnie: zdejmuje konfigurację ze sprzętu, a zapisane
+    wpisy zostają.</p>
+
+    <div class="head-tools" style="gap:0.6rem;">
+        <form method="post" action="/settings/syslog/clear-entries" class="bare"
+              data-confirm="Usunąć WSZYSTKIE zapisane wpisy syslog ({{ stats.total }})? Nie zmienia to konfiguracji urządzeń.">
+            <button type="submit" class="button-warn button-sm" {% if not stats.total %}disabled{% endif %}>
+                Wyczyść wszystkie wpisy ({{ stats.total }})
+            </button>
+        </form>
+        <form method="post" action="/settings/syslog/cleanup-devices" class="bare"
+              data-confirm="Zdjąć konfigurację syslogu z {{ stats.connected }} urządzeń? Operacja idzie po kolei i może chwilę potrwać; urządzenia offline zostaną pominięte i zgłoszone.">
+            <button type="submit" class="button-warn button-sm" {% if not stats.connected %}disabled{% endif %}>
+                Zdejmij konfigurację z routerów ({{ stats.connected }})
+            </button>
+        </form>
+    </div>
+</section>
+{% endblock %}

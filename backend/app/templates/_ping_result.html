@@ -1,0 +1,8 @@
+{% if address %}<span class="chip">{{ address }}</span> {% endif %}
+{% if result.ok and result.reachable %}
+<span class="pill pill-ok" title="odebrane/wysłane{% if result.packet_loss %} · strata {{ result.packet_loss }}%{% endif %}"><span class="dot"></span>{{ result.received }}/{{ result.sent }}{% if result.avg_rtt %} · {{ result.avg_rtt }}{% endif %}</span>
+{% elif result.ok %}
+<span class="pill pill-bad" title="{{ result.status or 'brak odpowiedzi' }}"><span class="dot"></span>brak odp.</span>
+{% else %}
+<span class="pill pill-idle" title="błąd API: {{ result.error }}">błąd API</span>
+{% endif %}

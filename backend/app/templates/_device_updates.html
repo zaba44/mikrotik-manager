@@ -1,0 +1,33 @@
+{% set run_active = run and run.status == "running" %}
+{% set can_operate = request.state.user and (request.state.user.role == 'admin' or (request.state.user.role == 'operator' and not request.state.user.status_only)) %}
+{# Samowygaszający polling: dopóki run trwa, fragment sam co 2s pobiera swoją nową
+   wersję. Gdy run się kończy, podmieniona wersja nie ma już hx-trigger -> polling
+   cichnie. Czyta tylko bazę (tanio), nie odpytuje routera. #}
+<div id="device-updates"{% if run_active %} hx-get="/devices/{{ device.id }}/fragment/updates" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+    <dl class="kv-grid" style="margin-bottom: 1.2rem;">
+        <div class="kv"><dt>RouterOS</dt><dd>{{ device.routeros_version or "—" }}{% if device.available_routeros_version and device.available_routeros_version not in (device.routeros_version or "") %} <span class="up">→ dostępna {{ device.available_routeros_version }}</span>{% endif %}</dd></div>
+        <div class="kv"><dt>Firmware</dt><dd>{{ device.current_firmware or "—" }}{% if device.available_firmware and device.available_firmware != device.current_firmware %} <span class="up">→ dostępny {{ device.available_firmware }}</span>{% endif %}</dd></div>
+    </dl>
+
+    {% include "_update_run_log.html" %}
+
+    {% if can_operate %}
+    <div class="actions-row">
+        <form method="post" action="/devices/{{ device.id }}/update" class="bare"
+              data-confirm="Zaktualizować RouterOS na {{ device.name }}? Urządzenie się zrestartuje.">
+            <input type="hidden" name="mode" value="software">
+            <button type="submit" {% if run_active %}disabled title="Aktualizacja już w toku"{% endif %}>Aktualizuj RouterOS</button>
+        </form>
+        <form method="post" action="/devices/{{ device.id }}/update" class="bare"
+              data-confirm="Zaktualizować firmware na {{ device.name }}? Urządzenie się zrestartuje.">
+            <input type="hidden" name="mode" value="firmware">
+            <button type="submit" {% if run_active %}disabled title="Aktualizacja już w toku"{% endif %}>Aktualizuj firmware</button>
+        </form>
+        <form method="post" action="/devices/{{ device.id }}/update" class="bare"
+              data-confirm="Zaktualizować RouterOS i firmware na {{ device.name }} (sekwencja z dwoma restartami)?">
+            <input type="hidden" name="mode" value="both">
+            <button type="submit" {% if run_active %}disabled title="Aktualizacja już w toku"{% endif %}>Aktualizuj oba (sekwencja)</button>
+        </form>
+    </div>
+    {% endif %}
+</div>

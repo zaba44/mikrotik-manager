@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}WireGuard — {{ device.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">WireGuard na routerze</span>
+        <h1 class="page-title">
+            {{ device.name }}
+            <span class="chip">{{ device.wg_ip }}</span>
+        </h1>
+        <p class="page-sub"><a href="/devices/{{ device.id }}">← wróć do urządzenia</a>
+            {% if r.ok %} · RouterOS {{ r.version }} · {{ r.arch }} · {{ r.board }}{% endif %}</p>
+    </div>
+</div>
+
+{% if not r.ok %}
+<p class="error">Nie udało się odczytać WireGuarda z routera: {{ r.error }}</p>
+{% elif r.level == SUPPORT_NONE %}
+<p class="error">RouterOS {{ r.version }} nie jest obsługiwany. Moduł WireGuard wymaga
+<b>7.15 lub nowszego</b> — wcześniejsze wersje nie mają pól <code>client-*</code> peera,
+z których powstaje config klienta. Rozwiązaniem jest aktualizacja routera.</p>
+{% else %}
+
+{% if r.level == SUPPORT_BASIC %}
+<p class="notice">Tryb podstawowy (RouterOS {{ r.version }}): monitor i config istniejących
+peerów. Router nie przechowuje AllowedIPs klienta, więc w oknie configu poprawiasz je
+ręcznie — bez zapisu na routerze. Dodawanie peerów wymaga RouterOS 7.21+.</p>
+{% endif %}
+
+{% if not interfaces %}
+<div class="empty-state">Na tym routerze nie ma interfejsów WireGuard (poza Back To Home).</div>
+{% else %}
+
+{% if is_admin and r.level == 'full' %}
+<p class="form-foot" style="margin:0 0 0.6rem; text-align:right;">
+    <a href="/devices/{{ device.id }}/wireguard/new" class="button button-ghost button-sm" style="text-decoration:none;">+ Nowy tunel</a>
+</p>
+{% endif %}
+<div class="tabs">
+    {% for i in interfaces %}
+    {% set c = counts[i.name] %}
+    <a href="?iface={{ i.name | urlencode }}" class="tab{% if iface and i.name == iface.name %} active{% endif %}"
+       {% if i.readonly %}title="Tylko do odczytu: {{ i.readonly_reason }}"{% endif %}>
+        {{ i.name }}
+        <span class="empty">{{ c[0] }}/{{ c[1] }}</span>
+        {% if i.readonly %}<span class="pill pill-idle" style="margin-left:0.3rem;">odczyt</span>{% endif %}
+    </a>
+    {% endfor %}
+</div>
+
+{% if iface %}
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            {{ iface.name }}
+        </h2>
+        {% if is_admin and not iface.readonly %}
+        <span class="head-tools" style="gap:0.4rem;">
+            {% if r.level == 'full' and iface.tunnel %}
+            <a href="/devices/{{ device.id }}/wireguard/add?iface={{ iface.name | urlencode }}" class="button button-sm" style="text-decoration:none;">Dodaj peery</a>
+            {% endif %}
+            <a href="/devices/{{ device.id }}/wireguard/import?iface={{ iface.name | urlencode }}" class="button button-ghost button-sm" style="text-decoration:none;">Uzupełnij z .conf</a>
+        </span>
+        {% endif %}
+        <span class="sec-summary">
+            port {{ iface.listen_port or "—" }}
+            {% if iface.tunnel %} · {{ iface.tunnel }}{% endif %}
+            {% if iface.disabled %} · <span class="pill pill-bad">wyłączony</span>{% endif %}
+        </span>
+    </div>
+
+    {% if iface.readonly %}
+    <p class="hint" style="margin-top:0;"><span class="pill pill-warn">tylko do odczytu</span>
+        {{ iface.readonly_reason }}{% if iface.carries_manager %} — zapis mógłby odciąć portal
+        od routera bez możliwości cofnięcia tym samym kanałem{% endif %}.
+        Komentarze peerów da się edytować także tutaj (przycisk ✎).</p>
+    {% endif %}
+
+    <div class="head-tools" style="gap:0.8rem; flex-wrap:wrap; margin-bottom:0.8rem;">
+        <input type="search" placeholder="Filtruj: nazwa, komentarz, adres, endpoint…"
+               data-filter="#wg-peers tbody tr.wg-row" data-filter-empty="#wg-filter-empty"
+               style="max-width:24rem;">
+        <span id="wg-counter" class="sec-summary" style="margin-left:0;">
+            {% include "routerwg/_counter.html" %}
+        </span>
+        <label style="display:flex; align-items:center; gap:0.4rem; margin:0 0 0 auto;">
+            <input type="checkbox" id="wg-auto" checked style="width:auto;">
+            odświeżaj co 15 s
+        </label>
+    </div>
+
+    {% include "routerwg/_table.html" %}
+    <p id="wg-filter-empty" class="empty" style="display:none;">Żaden peer nie pasuje do filtra.</p>
+
+    <p class="hint">Aktywny = handshake w ciągu ostatnich 3 minut. „Klucz" mówi, czy router
+    przechowuje klucz prywatny klienta — bez niego config i QR będą niekompletne.
+    Typ peera to tylko podpowiedź: <i>uplink</i> ma ustawiony endpoint,
+    <i>site-to-site</i> dodatkowe sieci w allowed-address, pozostałe to klienci.</p>
+</section>
+
+{% if is_admin %}
+<div id="wg-comment"></div>
+<div id="wg-config"></div>
+{% endif %}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endblock %}

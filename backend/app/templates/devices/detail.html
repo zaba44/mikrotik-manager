@@ -1,0 +1,398 @@
+{% extends "base.html" %}
+{% block title %}{{ device.name }} — MikroTik Manager{% endblock %}
+{% block content %}
+{% set run_active = run and run.status == "running" %}
+{% set can_operate = request.state.user and (request.state.user.role == 'admin' or (request.state.user.role == 'operator' and not request.state.user.status_only)) %}
+{% set is_admin = request.state.user.role == 'admin' %}
+
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Urządzenie</span>
+        <h1 class="page-title">
+            {{ device.name }}
+            <span class="chip">{{ device.wg_ip }}</span>
+            {% include "_status_badge.html" %}
+        </h1>
+        <p class="page-sub">Lokalizacja: {% if device.location %}<a href="/locations/{{ device.location.id }}">{{ device.location.name }}</a>{% else %}—{% endif %}</p>
+    </div>
+</div>
+
+{% if just_created %}
+<p class="notice"><strong>Urządzenie zarejestrowane{% if not peer_warning %}, peer dodany automatycznie po stronie serwera{% endif %}.</strong>
+Skrypt konfiguracyjny (sekcja „Konfiguracja RouterOS" poniżej) wklej ręcznie w terminalu Winbox/SSH
+na tym MikroTiku — to jedyny krok, który nadal wymaga ręcznej roboty.</p>
+{% endif %}
+
+{% if peer_warning %}<p class="error">{{ peer_warning }}</p>{% endif %}
+
+<div class="sections-toolbar">
+    <button type="button" class="button-ghost button-sm" data-sections-all="open">Rozwiń wszystko</button>
+    <button type="button" class="button-ghost button-sm" data-sections-all="close">Zwiń wszystko</button>
+</div>
+
+<details class="panel glow-card sec" data-sec="status" open>
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+            Status
+        </h2>
+        {% if can_operate %}
+        <form method="post" action="/devices/{{ device.id }}/reboot" class="bare"
+              data-confirm="Zrestartować {{ device.name }}? Urządzenie będzie niedostępne przez ok. minutę.">
+            <button type="submit" class="button-warn button-sm" {% if not device.api_username %}disabled title="Brak danych API"{% endif %}>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+                Restart urządzenia
+            </button>
+        </form>
+        {% endif %}
+    </summary>
+    {% if device.last_polled_at %}
+    <dl class="kv-grid">
+        <div class="kv"><dt>Ostatni handshake WG</dt><dd>{{ device.last_handshake_at.strftime("%Y-%m-%d %H:%M:%S") if device.last_handshake_at else "nigdy" }}</dd></div>
+        <div class="kv"><dt>REST API</dt><dd>{{ "osiągalne" if device.api_reachable else "nieosiągalne" }}</dd></div>
+        <div class="kv"><dt>Wersja RouterOS</dt><dd>{{ device.routeros_version or "—" }}</dd></div>
+        <div class="kv"><dt>Uptime</dt><dd>{{ device.routeros_uptime or "—" }}</dd></div>
+        <div class="kv"><dt>Port Winbox</dt><dd>{% if device.routeros_winbox_port %}<span class="chip">{{ device.routeros_winbox_port }}</span>{% else %}—{% endif %}</dd></div>
+        <div class="kv"><dt>Ostatnie sprawdzenie</dt><dd>{{ device.last_polled_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd></div>
+    </dl>
+    {% else %}
+    <div class="empty-state">Jeszcze nie sprawdzone — scheduler odpytuje urządzenia okresowo w tle.</div>
+    {% endif %}
+</details>
+
+<details class="panel glow-card sec" data-sec="health" open>
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            Kondycja
+        </h2>
+        <button type="button" class="button-ghost button-sm" hx-get="/devices/{{ device.id }}/fragment/health" hx-target="#health-body" hx-swap="innerHTML" hx-disabled-elt="this">Odśwież</button>
+    </summary>
+    <div id="health-body" hx-get="/devices/{{ device.id }}/fragment/health" hx-trigger="sec-open once" hx-swap="innerHTML">
+        <span class="empty">Ładowanie…</span>
+    </div>
+</details>
+
+<details class="panel glow-card sec" data-sec="interfaces">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v6a3 3 0 0 0 3 3h6a3 3 0 0 1 3 3v6"/><circle cx="6" cy="3" r="1.6"/><circle cx="18" cy="21" r="1.6"/></svg>
+            Interfejsy
+        </h2>
+        <button type="button" class="button-ghost button-sm" hx-get="/devices/{{ device.id }}/fragment/interfaces" hx-target="#interfaces-body" hx-swap="innerHTML" hx-disabled-elt="this">Odśwież</button>
+    </summary>
+    <div id="interfaces-body" hx-get="/devices/{{ device.id }}/fragment/interfaces" hx-trigger="sec-open once" hx-swap="innerHTML">
+        <span class="empty">Ładowanie…</span>
+    </div>
+</details>
+
+{% if device.notes %}
+<details class="panel glow-card sec" data-sec="notes" open>
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h13l3 3v13H4z"/><path d="M8 9h8"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+            Notatki
+        </h2>
+    </summary>
+    <pre class="notes-body">{{ device.notes }}</pre>
+</details>
+{% endif %}
+
+<details class="panel glow-card sec" data-sec="wireguard">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            WireGuard
+        </h2>
+        <span class="head-tools" style="gap:0.4rem;">
+            <a href="/devices/{{ device.id }}/wireguard" class="button button-ghost button-sm" style="text-decoration:none;">Monitor</a>
+            <a href="/devices/{{ device.id }}/bth" class="button button-ghost button-sm" style="text-decoration:none;">Back To Home</a>
+        </span>
+    </summary>
+    <div id="wireguard-body" hx-get="/devices/{{ device.id }}/fragment/wireguard" hx-trigger="sec-open once" hx-swap="innerHTML">
+        <span class="empty">Ładowanie…</span>
+    </div>
+</details>
+
+<details class="panel glow-card sec" data-sec="addresses">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+            Adresy IP
+        </h2>
+        {# Oba adresy zyja w naglowku tej sekcji, nie w Statusie: sa widoczne takze gdy
+           sekcja jest zwinieta, a jednoczesnie stoja tam, gdzie sie nimi zarzadza. #}
+        <span class="sec-addr">
+            <span class="sec-addr-item"><b>lokalny</b> <span id="status-local-addr">
+                {%- if device.local_addr_value %}<code>{{ device.local_addr_value }}</code>
+                {%- if device.local_addr_dynamic %} <span class="pill pill-idle">dyn</span>{% endif %}
+                {%- elif device.local_addr_interface %}<span class="empty">czekam na adres ({{ device.local_addr_interface }})</span>
+                {%- else %}<span class="empty">niewskazany</span>
+                {%- endif %}
+            </span></span>
+            <span class="sec-addr-item"><b>publiczny</b> <span id="status-public-addr">
+                {%- if device.public_address %}<code>{{ device.public_address }}</code>
+                {%- if device.public_behind_nat %} <span class="pill pill-warn">za NAT</span>
+                {%- elif device.public_behind_nat is not none %} <span class="pill pill-ok">bezpośredni</span>{% endif %}
+                {%- else %}<span class="empty">—</span>{% endif %}
+            </span></span>
+        </span>
+        <button type="button" class="button-ghost button-sm" hx-get="/devices/{{ device.id }}/fragment/addresses"
+                hx-target="#addresses-body" hx-swap="innerHTML" hx-disabled-elt="this">Odśwież</button>
+    </summary>
+    <div id="addresses-body" hx-get="/devices/{{ device.id }}/fragment/addresses" hx-trigger="sec-open once" hx-swap="innerHTML">
+        <span class="empty">Ładowanie…</span>
+    </div>
+</details>
+
+{% if device.poe_port_count is none or device.poe_port_count > 0 %}
+<details class="panel glow-card sec" data-sec="poe">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4.5 13.5H11l-1 8.5 8.5-11.5H12z"/></svg>
+            PoE
+        </h2>
+        <span class="sec-summary" id="poe-summary">
+            {%- if device.poe_port_count %}{{ device.poe_port_count }} portów{% endif %}
+        </span>
+        <button type="button" class="button-ghost button-sm" hx-get="/devices/{{ device.id }}/fragment/poe"
+                hx-target="#poe-body" hx-swap="innerHTML" hx-disabled-elt="this">Odśwież</button>
+    </summary>
+    <div id="poe-body" hx-get="/devices/{{ device.id }}/fragment/poe" hx-trigger="sec-open once" hx-swap="innerHTML">
+        <span class="empty">Ładowanie…</span>
+    </div>
+</details>
+{% endif %}
+
+<details class="panel glow-card sec" data-sec="updates">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+            Aktualizacje
+        </h2>
+        <span class="sec-summary">
+            {%- if device.available_routeros_version and device.available_routeros_version != device.routeros_version %}
+            dostępna {{ device.available_routeros_version }}
+            {%- elif device.routeros_version %}aktualny ({{ device.routeros_version }}){% endif %}
+        </span>
+        {% if can_operate %}
+        <form method="post" action="/devices/{{ device.id }}/check-updates" class="bare">
+            <button type="submit" class="button-ghost button-sm">Sprawdź teraz</button>
+        </form>
+        {% endif %}
+    </summary>
+    {% include "_device_updates.html" %}
+</details>
+
+{% if is_admin %}
+<details class="panel glow-card sec" data-sec="backups">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13.5h4"/></svg>
+            Kopie zapasowe
+        </h2>
+        {% set n_snap = backups | selectattr("backup_type", "equalto", "wg-snapshot") | list | length %}
+        {% set n_copy = backups | length - n_snap %}
+        <span class="sec-summary">{{ n_copy }} {{ "kopia" if n_copy == 1 else "kopii" }}{% if n_snap %} · {{ n_snap }} {{ "zrzut WG" if n_snap == 1 else "zrzutów WG" }}{% endif %}</span>
+        <form method="post" action="/devices/{{ device.id }}/backup" class="bare">
+            <button type="submit" class="button-sm" {% if not device.api_username %}disabled title="Brak danych API"{% endif %}>Zrób kopię teraz</button>
+        </form>
+    </summary>
+    <p class="hint">Export (<code>/export terse show-sensitive</code>) — każda linijka do samodzielnego
+    skopiowania, hasła w jawnej postaci. Backup binarny — pełne odtworzenie 1:1. Retencja i
+    harmonogram konfigurowalne w <a href="/settings">ustawieniach</a>.</p>
+    {% include "_device_backups.html" %}
+</details>
+{% endif %}
+
+<details class="panel glow-card sec" data-sec="leases">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="6" rx="2"/><rect x="2" y="14" width="20" height="6" rx="2"/><path d="M6 7h.01M6 17h.01"/></svg>
+            Dzierżawy DHCP
+        </h2>
+        <button type="button" class="button-ghost button-sm" hx-get="/devices/{{ device.id }}/fragment/leases" hx-target="#leases-body" hx-swap="innerHTML" hx-disabled-elt="this">Odśwież</button>
+    </summary>
+    <div id="leases-body" hx-get="/devices/{{ device.id }}/fragment/leases" hx-trigger="sec-open once" hx-swap="innerHTML">
+        <span class="empty">Ładowanie…</span>
+    </div>
+</details>
+
+{% if can_operate %}
+<details class="panel glow-card sec" data-sec="ping">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M5 12.9a10 10 0 0 1 14 0"/><path d="M1.5 9.4a15 15 0 0 1 21 0"/></svg>
+            Test sieci
+        </h2>
+        <span class="sec-summary">{{ ping_targets|length }} {{ "cel" if ping_targets|length == 1 else "celów" }}</span>
+        {% if ping_targets %}<button type="button" class="button-ghost button-sm" onclick="document.body.dispatchEvent(new Event('ping-all'))">Zbadaj wszystkie</button>{% endif %}
+    </summary>
+    <p class="hint">Pingi puszczane z tego MikroTika przez API — diagnostyka urządzeń (też
+    nie-MikroTikowych) w jego sieci. Dodaj adresy na stałe albo puść ping z palca.</p>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Etykieta</th><th>Adres</th><th>Wynik</th><th></th></tr></thead>
+            <tbody id="ping-targets-body">
+                {% for t in ping_targets %}{% include "_ping_target_row.html" %}{% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <form hx-post="/devices/{{ device.id }}/ping-targets" hx-target="#ping-targets-body" hx-swap="beforeend"
+          hx-on::after-request="this.reset()" class="form-inline" style="margin-top:0.8rem;">
+        <input type="text" name="ip" placeholder="IP lub host do dodania" required>
+        <input type="text" name="label" placeholder="etykieta (opcjonalnie)">
+        <button type="submit">Dodaj cel</button>
+    </form>
+    <div style="margin-top:1.1rem;">
+        <p class="hint" style="margin-bottom:0.4rem;">Ping z palca (jednorazowo, bez zapisywania):</p>
+        <form hx-post="/devices/{{ device.id }}/ping" hx-target="#adhoc-result" hx-swap="innerHTML" class="form-inline">
+            <input type="text" name="address" placeholder="IP lub host" required>
+            <button type="submit">Pinguj</button>
+        </form>
+        <div id="adhoc-result" style="margin-top:0.6rem;"></div>
+    </div>
+</details>
+{% endif %}
+
+<details class="panel glow-card sec" data-sec="syslog">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H5.2L4 18.5z"/><path d="M8 9h8"/><path d="M8 12.5h5"/></svg>
+            Zdarzenia (syslog)
+        </h2>
+        <span class="sec-summary">
+            {%- if device.syslog_enabled %}podpięty{% if device.syslog_info_enabled %} + info{% endif %}
+            {%- else %}niepodpięty{% endif %}
+        </span>
+        <button type="button" class="button-ghost button-sm" hx-get="/devices/{{ device.id }}/fragment/syslog"
+                hx-target="#syslog-body" hx-swap="innerHTML" hx-disabled-elt="this">Odśwież</button>
+    </summary>
+    <div id="syslog-body" hx-get="/devices/{{ device.id }}/fragment/syslog" hx-trigger="sec-open once" hx-swap="innerHTML">
+        <span class="empty">Ładowanie…</span>
+    </div>
+</details>
+
+{% if is_admin %}
+<details class="panel glow-card sec" data-sec="notify">
+    <summary class="panel-head"><h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        Powiadomienia
+    </h2></summary>
+    <div id="notify-scope-body" hx-get="/devices/{{ device.id }}/fragment/notifications"
+         hx-trigger="sec-open once" hx-target="this" hx-swap="innerHTML">
+        <span class="empty">Ładowanie…</span>
+    </div>
+</details>
+{% endif %}
+
+<details class="panel glow-card sec" data-sec="winbox">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Dostęp do Winboksa przez tunel
+        </h2>
+    </summary>
+    <div id="winbox-rule-body" hx-get="/devices/{{ device.id }}/fragment/winbox-rule" hx-trigger="sec-open once" hx-swap="innerHTML">
+        <span class="empty">Ładowanie…</span>
+    </div>
+</details>
+
+{% if is_admin %}
+<details class="panel glow-card sec" data-sec="config">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m8 8-4 4 4 4"/><path d="m16 8 4 4-4 4"/></svg>
+            Konfiguracja RouterOS
+        </h2>
+        {% if device.api_username %}
+        <form method="post" action="/devices/{{ device.id }}/generate-api-credentials" class="bare"
+              data-confirm="Wygenerować nowe hasło API? Stare przestanie działać dopóki nie wkleisz nowego skryptu na routerze.">
+            <button type="submit" class="button-ghost button-sm">Zregeneruj dane API</button>
+        </form>
+        {% endif %}
+    </summary>
+
+    {% if api_credentials_generated %}
+    <p class="error">Nowe dane API wygenerowane. Wklej na routerze przynajmniej linie
+    <code>/user group add</code>, <code>/user add</code>, <code>/ip service set www-ssl</code>
+    i reguły <code>/ip firewall filter</code> ze skryptu poniżej — stare dane API (jeśli
+    router miał inne) przestaną działać dopiero po nadpisaniu ich tym skryptem.</p>
+    {% elif not device.api_username %}
+    <p class="error">To urządzenie nie ma jeszcze wygenerowanych danych API (dlatego skrypt
+    poniżej ma puste <code>name=</code> i <code>password=</code> w linii <code>/user add</code>)
+    — wygeneruj je, żeby móc testować REST/status.</p>
+    <form method="post" action="/devices/{{ device.id }}/generate-api-credentials" class="bare" style="margin-bottom: 1rem;">
+        <button type="submit">Wygeneruj dane API</button>
+    </form>
+    {% endif %}
+
+    {% if not just_created %}
+    <p class="hint">Skrypt konfiguracyjny (do ponownego wklejenia, jeśli trzeba):</p>
+    {% endif %}
+
+    <div class="code-block">
+        <div class="code-head">
+            <span>skrypt konfiguracyjny · Winbox / SSH</span>
+            <button type="button" class="copy-btn">Kopiuj</button>
+        </div>
+        <pre>{{ script }}</pre>
+    </div>
+</details>
+
+<details class="panel glow-card sec" data-sec="edit">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>
+            Edytuj
+        </h2>
+    </summary>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <form method="post" action="/devices/{{ device.id }}/edit">
+        <label for="name">Nazwa</label>
+        <input type="text" id="name" name="name" value="{{ device.name }}" required>
+
+        <label for="location_id">Lokalizacja</label>
+        <select id="location_id" name="location_id">
+            <option value="">— brak —</option>
+            {% for location in locations %}
+            <option value="{{ location.id }}" {% if device.location_id and location.id == device.location_id %}selected{% endif %}>{{ location.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="notes">Notatki (informacje sieciowe, konfiguracja, cokolwiek trzeba zapamiętać)</label>
+        <textarea id="notes" name="notes" rows="14">{{ device.notes or "" }}</textarea>
+
+        <p class="form-foot"><button type="submit">Zapisz</button></p>
+    </form>
+</details>
+
+<details class="panel panel-danger sec" data-sec="danger">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            Strefa ryzyka
+        </h2>
+    </summary>
+
+    <p class="hint">Zanim usuniesz urządzenie z portalu (albo zanim podepniesz ten sam fizyczny
+    router pod nowy wpis), wklej ten skrypt w Winbox/terminalu — zdejmuje interfejs WG,
+    peera, konto API i reguły firewalla dodane przez portal. Bezpieczne do wklejenia nawet
+    jeśli część rzeczy już nie istnieje (<code>[find ...]</code> po prostu nic nie znajdzie).</p>
+    <div class="code-block">
+        <div class="code-head">
+            <span>skrypt czyszczący router</span>
+            <button type="button" class="copy-btn">Kopiuj</button>
+        </div>
+        <pre>{{ removal_script }}</pre>
+    </div>
+
+    <p class="hint">Usunięcie urządzenia kasuje rekord z portalu (klucze, IP, dane API) i peera z żywego <code>wg-mt</code>.
+    Nie cofa configu na routerze — użyj skryptu powyżej, jeśli chcesz go też wyczyścić tam.</p>
+    <form method="post" action="/devices/{{ device.id }}/delete" class="bare"
+          data-confirm="Na pewno usunąć {{ device.name }}? Tej operacji nie można cofnąć.">
+        <button type="submit" class="button-danger">Usuń urządzenie</button>
+    </form>
+</details>
+{% endif %}
+{% endblock %}

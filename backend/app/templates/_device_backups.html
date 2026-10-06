@@ -1,0 +1,49 @@
+{# Lekki polling co 10s (tania odczyt z bazy) — żeby kopia zrobiona przyciskiem
+   „Zrób kopię teraz" (leci w tle) pojawiła się bez ręcznego odświeżania. #}
+<div id="device-backups" hx-get="/devices/{{ device.id }}/fragment/backups" hx-trigger="every 10s" hx-swap="outerHTML">
+    {% if backups %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Typ</th>
+                    <th>Data</th>
+                    <th>Rozmiar</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for backup in backups %}
+                <tr>
+                    <td>
+                        {% if backup.backup_type == "wg-snapshot" %}<span class="chip">Zrzut WG</span>
+                        {% elif backup.backup_type == "export" %}Export{% else %}Binarny{% endif %}
+                        {% if backup.note %}<br><span class="empty">{{ backup.note }}</span>{% endif %}
+                    </td>
+                    <td>{{ backup.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+                    <td>{{ (backup.size_bytes / 1024) | round(1) ~ " KB" if backup.size_bytes else "—" }}</td>
+                    <td>
+                        {% if backup.status == "success" %}<span class="pill pill-ok">OK</span>
+                        {% else %}<span class="pill pill-bad" title="{{ backup.error_message or '' }}">błąd</span>{% endif %}
+                    </td>
+                    <td>
+                        <span class="actions-row">
+                            {% if backup.status == "success" %}
+                            <a href="/backups/{{ backup.id }}/download">pobierz</a>
+                            {% endif %}
+                            <form method="post" action="/backups/{{ backup.id }}/delete" class="bare"
+                                  data-confirm="Usunąć tę kopię?">
+                                <button type="submit" class="button-danger button-sm">usuń</button>
+                            </form>
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty">Jeszcze żadnych kopii.</p>
+    {% endif %}
+</div>

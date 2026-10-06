@@ -1,0 +1,50 @@
+{# Sterowanie powiadomieniami dla urządzenia albo lokalizacji.
+   `scope_url` = /devices/<id> albo /locations/<id>; `inherit_label` mówi PRAWDĘ o tym,
+   co się dziedziczy (globalne albo ustawienia lokalizacji), bo przy trzech poziomach
+   słowo „domyślne" zaczyna kłamać. #}
+{% set mode = ov.mode if ov else 'default' %}
+<form method="post" action="{{ scope_url }}/notifications" class="bare">
+    <label for="notify_mode_{{ scope_id }}">Powiadomienia</label>
+    <select id="notify_mode_{{ scope_id }}" name="mode"
+            onchange="this.closest('form').querySelector('.notify-custom').style.display =
+                      this.value === 'custom' ? 'block' : 'none';
+                      this.closest('form').querySelector('.notify-mute').style.display =
+                      this.value === 'muted' ? 'block' : 'none';">
+        <option value="default" {% if mode == 'default' %}selected{% endif %}>{{ inherit_label }}</option>
+        <option value="muted" {% if mode == 'muted' %}selected{% endif %}>Wyciszone</option>
+        <option value="custom" {% if mode == 'custom' %}selected{% endif %}>Własne ustawienia</option>
+    </select>
+
+    <div class="notify-mute" style="display:{% if mode == 'muted' %}block{% else %}none{% endif %};">
+        <label for="mute_hours_{{ scope_id }}">Wycisz na</label>
+        <select id="mute_hours_{{ scope_id }}" name="mute_hours">
+            <option value="1">godzinę</option>
+            <option value="8">8 godzin</option>
+            <option value="24">dobę</option>
+            <option value="168">tydzień</option>
+            <option value="0">bezterminowo</option>
+        </select>
+        <p class="hint" style="margin:0.3rem 0 0;">Wyciszenie z terminem samo wygaśnie.
+        Bezterminowe zostanie, dopóki go nie zdejmiesz — takie przypomina raport tygodniowy.</p>
+    </div>
+
+    <div class="notify-custom" style="display:{% if mode == 'custom' %}block{% else %}none{% endif %};">
+        <p class="hint" style="margin:0.4rem 0;">Zaznaczone typy <b>zastępują</b> to, co obowiązuje
+        wyżej — lista jest kompletna sama w sobie, nie dokłada się do niczego.</p>
+        {% for key, label in event_types %}
+        <label style="display:flex; align-items:center; gap:0.5rem; margin:0.3rem 0;">
+            <input type="checkbox" name="events" value="{{ key }}" style="width:auto;"
+                   {% if ov and key in selected_events %}checked{% endif %}>
+            {{ label }}
+        </label>
+        {% endfor %}
+    </div>
+
+    <p class="form-foot" style="margin-top:0.8rem;"><button type="submit" class="button-sm">Zapisz</button></p>
+</form>
+
+<p class="hint" style="margin-top:0.6rem;">
+    <b>Obecnie zgłaszane:</b>
+    {% if effective %}{{ effective | join(', ') }}{% else %}<span class="empty">nic</span>{% endif %}
+    <span class="empty">— {{ effective_source }}</span>
+</p>

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nowa instalacja — MikroTik Manager</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/fx.js" defer></script>
+</head>
+<body>
+    <canvas id="bg-net" aria-hidden="true"></canvas>
+    <div class="setup-wrap">
+        <div class="setup-head">
+            <span class="brand-name" style="font-size:1.2rem;">Nowa instalacja</span>
+            <p class="login-sub"><a href="/setup" style="color:var(--text-faint);">← wróć do wyboru</a></p>
+        </div>
+
+        {% if error %}<p class="error" style="max-width:560px;margin:0 auto 1rem;">{{ error }}</p>{% endif %}
+
+        <form method="post" action="/setup/wizard" class="panel glow-card" style="max-width:560px;margin:0 auto;">
+            <div class="panel-head"><h2>Token instalacyjny</h2></div>
+            <p class="hint" style="margin-top:0;">Zabezpiecza kreator przed kimkolwiek, kto dotrze do
+            tego adresu przed Tobą. Portal wypisał go do logów przy starcie:
+            <code>docker compose logs backend | grep TOKEN</code></p>
+            <input type="text" id="token" name="token" required autocomplete="off" spellcheck="false"
+                   placeholder="XXXX-XXXX-XXXX" style="font-family:var(--mono); letter-spacing:0.08em;">
+
+            <div class="panel-head" style="margin-top:1.6rem;"><h2>Administrator</h2></div>
+            <label for="username">Login administratora</label>
+            <input type="text" id="username" name="username" required autocomplete="username" value="{{ prefill.username if prefill else '' }}">
+            <label for="password">Hasło</label>
+            <input type="password" id="password" name="password" required autocomplete="new-password">
+
+            <div class="panel-head" style="margin-top:1.6rem;"><h2>Sieć WireGuard</h2></div>
+            <label for="server_ip">Adres huba w tunelu</label>
+            <div class="head-tools" style="gap:0.5rem;">
+                <input type="text" id="server_ip" name="server_ip" required placeholder="10.22.20.1"
+                       value="{{ prefill.server_ip if prefill else '10.22.20.1' }}" oninput="preview()" style="flex:1 1 auto;">
+                <button type="button" class="button-ghost button-sm" onclick="randomize()">Losuj</button>
+            </div>
+
+            <label for="mask" style="margin-top:1rem;">Maska (ile urządzeń się zmieści)</label>
+            <select id="mask" name="mask" onchange="preview()">
+                <option value="24" {% if prefill and prefill.mask == '24' %}selected{% endif %}>/24 — 254 urządzenia</option>
+                <option value="23" {% if prefill and prefill.mask == '23' %}selected{% endif %}>/23 — 510 urządzeń</option>
+                <option value="22" {% if (prefill and prefill.mask == '22') or not prefill %}selected{% endif %}>/22 — 1022 urządzenia (zalecane)</option>
+                <option value="21" {% if prefill and prefill.mask == '21' %}selected{% endif %}>/21 — 2046 urządzeń</option>
+                <option value="20" {% if prefill and prefill.mask == '20' %}selected{% endif %}>/20 — 4094 urządzenia</option>
+                <option value="16" {% if prefill and prefill.mask == '16' %}selected{% endif %}>/16 — 65534 (zjada całą klasę B)</option>
+            </select>
+            <p class="hint" id="capacity" style="margin:0.5rem 0 0;"></p>
+            <p class="hint"><b>To decyzja jednorazowa.</b> Podsieć i maska trafiają do konfiguracji
+            każdego routera (adres na interfejsie i <code>allowed-address</code> na peerze), więc
+            zmiana po wdrożeniu floty oznacza przepisanie configu na każdym urządzeniu.</p>
+
+            <label for="hub_endpoint" style="margin-top:1rem;">Adres/domena huba (tu łączą się urządzenia)</label>
+            <input type="text" id="hub_endpoint" name="hub_endpoint" required placeholder="np. vpn.twojafirma.pl albo IP"
+                   value="{{ prefill.hub_endpoint if prefill else '' }}">
+
+            <p class="hint" style="margin-top:1rem;">Port WireGuard: <span class="chip">{{ wg_port }}</span> — ustawiany w <code>.env</code>
+            (mapowanie Dockera), nie tutaj. Zmiana po wdrożeniu floty odłącza urządzenia, więc wybierz go raz na starcie.</p>
+
+            <p class="form-foot"><button type="submit" style="width:100%;">Utwórz portal i zaloguj</button></p>
+        </form>
+    </div>
+
+    <script>
+    function parseIp(t) {
+        var m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec((t || "").trim());
+        if (!m) return null;
+        var o = [+m[1], +m[2], +m[3], +m[4]];
+        if (o.some(function (x) { return x > 255; })) return null;
+        return ((o[0] << 24) | (o[1] << 16) | (o[2] << 8) | o[3]) >>> 0;
+    }
+    function fmtIp(n) {
+        return [(n >>> 24) & 255, (n >> 16) & 255, (n >> 8) & 255, n & 255].join(".");
+    }
+    function preview() {
+        var el = document.getElementById("capacity");
+        var ip = parseIp(document.getElementById("server_ip").value);
+        var bits = +document.getElementById("mask").value;
+        if (ip === null) {
+            el.innerHTML = '<span style="color:var(--warn)">Podaj poprawny adres IPv4, np. 10.22.20.1</span>';
+            return;
+        }
+        var mask = (0xFFFFFFFF << (32 - bits)) >>> 0;
+        var net = (ip & mask) >>> 0;
+        var hosts = Math.pow(2, 32 - bits) - 2;
+        var first = net + 1, last = net + hosts;
+        var warn = "";
+        if (ip === net || ip === last + 1) {
+            warn = '<br><span style="color:var(--warn)">Ten adres to adres sieci albo rozgłoszeniowy — wybierz inny.</span>';
+        }
+        el.innerHTML = "Podsieć <b>" + fmtIp(net) + "/" + bits + "</b> · zakres <b>" + fmtIp(first)
+            + "</b>–<b>" + fmtIp(last) + "</b> · hub zajmie <b>" + fmtIp(ip) + "</b> · <b>"
+            + (hosts - 1) + "</b> adresów na urządzenia i peery administracyjne." + warn;
+    }
+    function randomize() {
+        // Prywatne 10.x.y.0 wyrownane do wybranej maski (omija 10.0.0.x).
+        var bits = +document.getElementById("mask").value;
+        var a = 1 + Math.floor(Math.random() * 254), b = Math.floor(Math.random() * 256);
+        var base = ((10 << 24) | (a << 16) | (b << 8)) >>> 0;
+        var mask = (0xFFFFFFFF << (32 - bits)) >>> 0;
+        document.getElementById("server_ip").value = fmtIp(((base & mask) >>> 0) + 1);
+        preview();
+    }
+    preview();
+    </script>
+</body>
+</html>

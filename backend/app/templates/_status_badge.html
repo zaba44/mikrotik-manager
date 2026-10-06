@@ -1,0 +1,12 @@
+{% if device.last_polled_at is none %}
+<span class="pill pill-idle">nie sprawdzono</span>
+{% elif device.api_reachable %}
+<span class="pill pill-ok"><span class="dot"></span>online{% if device.routeros_version %} · {{ device.routeros_version }}{% endif %}</span>
+{% if device.available_routeros_version and device.available_routeros_version not in (device.routeros_version or "") %}
+<span class="pill pill-warn" title="Dostępna aktualizacja RouterOS">↑ {{ device.available_routeros_version }}</span>
+{% endif %}
+{% elif device.wg_reachable %}
+<span class="pill pill-warn"><span class="dot"></span>WG OK, API nie</span>
+{% else %}
+<span class="pill pill-bad"><span class="dot"></span>offline</span>
+{% endif %}

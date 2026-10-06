@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Dodaj peery — {{ device.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">WireGuard · dodawanie peerów</span>
+        <h1 class="page-title">{{ device.name }}{% if iface %} <span class="chip">{{ iface.name }}</span>{% endif %}</h1>
+        <p class="page-sub"><a href="/devices/{{ device.id }}/wireguard{% if iface %}?iface={{ iface.name | urlencode }}{% endif %}">← wróć do monitora</a></p>
+    </div>
+</div>
+
+{% if reason %}
+<p class="error">{{ reason }}</p>
+{% else %}
+
+{% for e in errors or [] %}<p class="error">{{ e }}</p>{% endfor %}
+
+{% if step == "form" %}
+<section class="panel glow-card" style="max-width:860px;">
+    <div class="panel-head"><h2>Nowe peery na {{ iface.name }}</h2>
+        <span class="sec-summary">{{ iface.tunnel }} · port {{ iface.listen_port }}</span></div>
+    <p class="hint" style="margin-top:0;">Adresy biorę z rzeczywistej podsieci interfejsu, z pominięciem
+    adresu serwera i wszystkich allowed-address istniejących peerów.
+    {% if free_preview %}Pierwsze wolne: <code>{{ free_preview | join(", ") }}</code>…{% endif %}
+    Klucze generuje router, a pola formularza podpowiadam z najczęstszych wartości na tym interfejsie.</p>
+    <form method="post" action="/devices/{{ device.id }}/wireguard/add/preview">
+        <input type="hidden" name="iface" value="{{ iface.name }}">
+        {% include "routerwg/_peer_params.html" %}
+        <p class="form-foot"><button type="submit">Podgląd</button></p>
+    </form>
+</section>
+
+{% elif step == "preview" %}
+<section class="panel glow-card" style="max-width:860px;">
+    <div class="panel-head"><h2>Podgląd — nic jeszcze nie zostało zapisane</h2></div>
+    <p style="margin-top:0;">Dodam <b>{{ plan | length }}</b> {{ plural(plan | length, "peera", "peery", "peerów") }}
+    na <code>{{ iface.name }}</code>:</p>
+    <div class="table-wrap table-fit">
+        <table>
+            <thead><tr><th>Nazwa i komentarz</th><th>allowed-address</th><th>client-address</th></tr></thead>
+            <tbody>
+            {% for x in plan %}
+            <tr><td><b>{{ x.name }}</b></td><td><code>{{ x.ip }}/32</code></td><td><code>{{ x.ip }}/{{ x.prefixlen }}</code></td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <dl class="kv-grid" style="margin-top:1rem;">
+        <div class="kv"><dt>Endpoint w configu</dt><dd><code>{{ p.endpoint }}:{{ iface.listen_port }}</code></dd></div>
+        <div class="kv"><dt>DNS</dt><dd>{{ p.dns or "—" }}</dd></div>
+        <div class="kv"><dt>AllowedIPs klienta</dt><dd>{{ p.client_allowed or (iface.tunnel.ip ~ "/32") }}</dd></div>
+        <div class="kv"><dt>Keepalive</dt><dd>{{ p.keepalive }} s</dd></div>
+        <div class="kv"><dt>PreSharedKey</dt><dd>{{ "tak" if p.psk else "nie" }}</dd></div>
+        <div class="kv"><dt>Responder</dt><dd>{{ "tak" if p.responder else "nie" }}</dd></div>
+    </dl>
+    <form method="post" action="/devices/{{ device.id }}/wireguard/add/apply" style="margin-top:1rem;"
+          onsubmit="this.querySelector('button[type=submit]').disabled = true;">
+        <input type="hidden" name="iface" value="{{ iface.name }}">
+        <input type="hidden" name="planned" value="{{ plan | map(attribute='ip') | join(',') }}">
+        {% for k in ("count", "prefix", "endpoint", "dns", "client_allowed", "keepalive") %}
+        <input type="hidden" name="{{ k }}" value="{{ p[k] }}">
+        {% endfor %}
+        {% if p.psk %}<input type="hidden" name="psk" value="1">{% endif %}
+        {% if p.responder %}<input type="hidden" name="responder" value="1">{% endif %}
+        <p class="hint">Przed zapisem zrobię zrzut peerów tego interfejsu. Przy zatwierdzeniu
+        sprawdzę jeszcze raz, czy te adresy są nadal wolne — jeśli ktoś w międzyczasie zmienił
+        router, niczego nie zapiszę.</p>
+        <p class="form-foot" style="display:flex; gap:0.6rem;">
+            <button type="submit">Dodaj na routerze</button>
+            <a href="/devices/{{ device.id }}/wireguard/add?iface={{ iface.name | urlencode }}" class="button button-ghost" style="text-decoration:none;">Zmień</a>
+        </p>
+    </form>
+</section>
+
+{% elif step == "done" %}
+<section class="panel glow-card" style="max-width:860px;">
+    <div class="panel-head"><h2>Wynik</h2></div>
+    {% set iface_name = iface.name %}
+    {% include "routerwg/_results.html" %}
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,16 @@
+{
+	# Panel bywa osiągalny pod kilkoma adresami naraz (LAN, adres huba w tunelu,
+	# adres peera administracyjnego). Przy wejściu po gołym IP przeglądarka NIE
+	# wysyła SNI, więc serwer i tak poda certyfikat domyślny — dlatego blok jest
+	# uniwersalny (nasłuch na porcie, bez wiązania z nazwą), a wszystkie adresy
+	# siedzą w polu SubjectAlternativeName JEDNEGO certyfikatu.
+	auto_https off
+}
+
+:{$CADDY_PORT} {
+	# Pliki generuje backend przy pierwszym starcie (własne mini-CA — patrz
+	# app/certs.py) na wolumenie tls_data, montowanym tu tylko do odczytu.
+	# Użytkownik może je podmienić z panelu na certyfikat z własnego CA.
+	tls /certs/fullchain.pem /certs/cert.key
+	reverse_proxy backend:8000
+}

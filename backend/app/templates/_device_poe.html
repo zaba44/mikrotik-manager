@@ -1,0 +1,96 @@
+{% if not r.ok %}
+<p class="error" style="margin:0;">Nie udało się odczytać PoE: {{ r.error }}</p>
+{% elif not r.supported %}
+<div class="empty-state">To urządzenie nie ma portów PoE.</div>
+{% else %}
+
+{% if error %}<p class="error" style="margin-top:0;">{{ error }}</p>{% endif %}
+{% if notice %}<p class="notice" style="margin-top:0;">{{ notice }}</p>{% endif %}
+
+<div class="table-wrap table-fit">
+    <table>
+        <thead><tr>
+            <th>Port</th><th>Opis</th><th>Stan</th><th>Moc</th><th>Napięcie</th><th>Prąd</th>
+            <th>Priorytet</th>{% if can_operate %}<th>Zasilanie</th><th></th>{% endif %}
+        </tr></thead>
+        <tbody>
+            {% for p in r.rows %}
+            {% set locked = p.name in locks %}
+            <tr{% if locked %} class="row-locked"{% endif %}>
+                <td><code>{{ p.name }}</code>
+                    {% if locked %}<br><span class="pill pill-warn">uplink</span>
+                        {% if locks[p.name] %}<br><span class="empty">{{ locks[p.name] }}</span>{% endif %}
+                    {% endif %}</td>
+                <td>{% if p.comment %}<b>{{ p.comment }}</b>{% else %}<span class="empty">—</span>{% endif %}</td>
+                <td>
+                    {% if p.status == 'powered-on' %}<span class="pill pill-ok"><span class="dot"></span>zasila</span>
+                    {% elif p.status == 'waiting-for-load' %}<span class="pill pill-idle">brak odbiornika</span>
+                    {% elif p.status == 'disabled' %}<span class="pill pill-idle">wyłączony</span>
+                    {% elif p.status %}<span class="pill pill-bad">{{ p.status }}</span>
+                    {% else %}<span class="empty">—</span>{% endif %}
+                </td>
+                {# Brak pomiaru to kreska, nie zero: nie kazdy model mierzy, a zero znaczyloby
+                   „zmierzono 0 W" — czyli cos zupelnie innego niz „ten model nie mierzy". #}
+                <td>{% if p.power_w is not none %}<b>{{ p.power_w }} W</b>{% else %}<span class="empty">—</span>{% endif %}</td>
+                <td>{% if p.voltage is not none %}{{ p.voltage }} V{% else %}<span class="empty">—</span>{% endif %}</td>
+                <td>{% if p.current_ma is not none %}{{ p.current_ma | round | int }} mA{% else %}<span class="empty">—</span>{% endif %}</td>
+                <td class="empty">{{ p.priority or "—" }}</td>
+                {% if can_operate %}
+                <td>
+                    {% if locked %}
+                    <span class="empty">zablokowane</span>
+                    {% else %}
+                    <form hx-post="/devices/{{ device.id }}/poe/set" hx-target="#poe-body" hx-swap="innerHTML" class="bare">
+                        <input type="hidden" name="port_id" value="{{ p.id }}">
+                        <input type="hidden" name="interface" value="{{ p.name }}">
+                        <select name="value" onchange="this.form.requestSubmit()" style="width:auto; padding:0.25rem 0.4rem;">
+                            {% for v in ('auto-on', 'forced-on', 'off') %}
+                            <option value="{{ v }}" {% if p.poe_out == v %}selected{% endif %}>{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                    {% endif %}
+                </td>
+                <td style="text-align:right; white-space:nowrap;">
+                    {% if locked and is_admin %}
+                    <form hx-post="/devices/{{ device.id }}/poe/unlock" hx-target="#poe-body" hx-swap="innerHTML" class="bare">
+                        <input type="hidden" name="interface" value="{{ p.name }}">
+                        <button type="submit" class="button-ghost button-sm">Zdejmij blokadę</button>
+                    </form>
+                    {% elif locked %}
+                    <span class="empty">zablokowane</span>
+                    {% else %}
+                    <form hx-post="/devices/{{ device.id }}/poe/cycle" hx-target="#poe-body" hx-swap="innerHTML" class="bare"
+                          style="display:inline-block;"
+                          hx-confirm="Odciąć zasilanie na porcie {{ p.name }}{% if p.comment %} ({{ p.comment }}){% endif %} na 5 sekund? Urządzenie się zrestartuje.">
+                        <input type="hidden" name="interface" value="{{ p.name }}">
+                        <button type="submit" class="button-warn button-sm"
+                                {% if p.status != 'powered-on' %}disabled title="Port nikogo nie zasila"{% endif %}>Restart</button>
+                    </form>
+                    {% if is_admin %}<form hx-post="/devices/{{ device.id }}/poe/lock" hx-target="#poe-body" hx-swap="innerHTML" class="bare"
+                          style="display:inline-block;"
+                          hx-confirm="Oznaczyć {{ p.name }} jako uplink? Portal odmówi wtedy jego wyłączenia i restartu.">
+                        <input type="hidden" name="interface" value="{{ p.name }}">
+                        <button type="submit" class="button-ghost button-sm">Uplink</button>
+                    </form>{% endif %}
+                    {% endif %}
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<p class="hint"><b>Restart</b> odcina zasilanie na 5 sekund — to zdalny reset kamery czy accessa.
+Łącze danych przy tym nie pada, więc urządzenia za switchem nie tracą sieci.
+<b>Uplink</b> oznacza port, przez który idzie zasilanie do samego switcha albo do drogi
+powrotnej — portal odmawia wtedy jego wyłączenia i restartu, także gdyby żądanie przyszło
+z pominięciem interfejsu.</p>
+
+{# Podmiana poza celem: naglowek sekcji ma pokazywac aktualny bilans bez przeladowania. #}
+<span id="poe-summary" hx-swap-oob="true">
+    {{ r.rows | length }} {{ "port" if r.rows|length == 1 else "portów" }} ·
+    {{ r.powered }} zasila{% if r.total_power %} · {{ r.total_power }} W{% endif %}
+</span>
+{% endif %}
