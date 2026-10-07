@@ -92,3 +92,27 @@ def test_template_without_modem():
     html = templates.env.get_template("_device_lte.html").render(request=request, device=types.SimpleNamespace(id="x"),
                                                                  r={"ok": True, "modems": []})
     assert "nie ma modemu" in html
+
+
+def test_firmware_check_sends_parameters_routeros_accepts(monkeypatch):
+    """`firmware-upgrade` przyjmuje `number` (nie `numbers`, jak monitor) i potrzebuje `once`
+    — ustalone przez /console/inspect po bledzie „unknown parameter numbers" na produkcji."""
+    import asyncio
+    import httpx
+    from app import routeros_client
+    from app.models import Device
+    from app.security import encrypt
+    sent = {}
+
+    def handler(req: httpx.Request):
+        import json as _json
+        sent.update(_json.loads(req.content))
+        return httpx.Response(200, json=[{"installed": "A.1", "latest": "A.2", "status": "new firmware available"}])
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(routeros_client.httpx, "AsyncClient",
+                        lambda **kw: real(transport=httpx.MockTransport(handler), **{k: v for k, v in kw.items() if k != "verify"}))
+    dev = Device(name="t", api_username="u", api_password_encrypted=encrypt("p"), wg_ip="10.0.0.2")
+    r = asyncio.run(routeros_client.lte_firmware_check(dev, "lte1"))
+    assert sent == {"number": "lte1", "once": ""}
+    assert r["ok"] and r["installed"] == "A.1" and r["latest"] == "A.2"

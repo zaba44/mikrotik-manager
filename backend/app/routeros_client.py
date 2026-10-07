@@ -922,11 +922,16 @@ async def get_lte(device: Device) -> dict:
 
 async def lte_firmware_check(device: Device, name: str) -> dict:
     """`/interface/lte/firmware-upgrade` BEZ upgrade=yes — tylko sprawdza wersje (modem pyta
-    serwery producenta, wiec moze to potrwac). Na terminalu zwraca installed/latest/status."""
+    serwery producenta, wiec moze to potrwac). Na terminalu zwraca installed/latest/status.
+
+    Parametry ustalone przez `/console/inspect` na RouterOS 7 (nie zgadywane): wskazanie
+    modemu to `number` (LICZBA POJEDYNCZA — w `monitor` jest `numbers`; pierwsza wersja wyslala
+    `numbers` i dostala „unknown parameter numbers"), a polecenie dziala jak monitor, wiec
+    potrzebuje `once` — bez niego REST nie zwrocilby wyniku."""
     try:
         async with httpx.AsyncClient(verify=False, timeout=90.0, auth=_auth(device)) as client:
             resp = await client.post(f"{_base_url(device)}/rest/interface/lte/firmware-upgrade",
-                                     json={"numbers": name})
+                                     json={"number": name, "once": ""})
         if resp.status_code >= 400:
             return {"ok": False, "error": f"HTTP {resp.status_code}: {resp.text[:160]}"}
         data = resp.json()
