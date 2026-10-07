@@ -91,14 +91,20 @@ def build_routeros_script(
 /user add name={api_username} password="{api_password}" group=mtm-api address={wg.server_ip}/32
 
 /certificate add name=mtm-cert common-name={device_ip} days-valid=3650
+/certificate sign mtm-cert
+:delay 3s
 /ip service set www-ssl address={wg.server_ip}/32 certificate=mtm-cert disabled=no
 /ip firewall filter add chain=input protocol=icmp src-address={wg.server_ip}/32 \\
     in-interface=wg-mt action=accept place-before=0 comment="MTM: ping z huba"
 /ip firewall filter add chain=input protocol=tcp dst-port=443 src-address={wg.server_ip}/32 \\
     in-interface=wg-mt action=accept place-before=0 comment="MTM: REST API z huba"
-
-/certificate sign mtm-cert
 """
+# Kolejnosc certyfikatu ma znaczenie: `/ip service set www-ssl certificate=` przyjmuje tylko
+# certyfikat PODPISANY. Dawniej `sign` stal na koncu skryptu i na RouterOS, ktory nie
+# przyjmuje szablonu, usluga konczyla sie bledem „input does not match any value of
+# certificate" — tunel wstawal, a REST zostawal niedostepny (pierwsza instalacja
+# produkcyjna, 2026-10-07). `:delay` na wypadek, gdy podpis konczy sie chwile po powrocie
+# polecenia (import skryptu zamiast wklejenia w terminal).
 
 
 WINBOX_ADDRESS_LIST = "mtm-admin"
