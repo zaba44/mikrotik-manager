@@ -145,3 +145,21 @@ def test_about_template_keys_do_not_shadow_dict_methods():
     html = open("app/templates/settings_about.html", encoding="utf-8").read()
     used = set(_re.findall(r"\babout\.(\w+)", html)) | set(_re.findall(r"\bp\.(\w+)", html))
     assert not used & set(dir(dict)), used & set(dir(dict))
+
+
+@pytest.mark.parametrize("ros,old", [
+    ("7.13.5 (stable)", True), ("7.14.3 (stable)", True), ("6.49.10 (long-term)", True),
+    ("7.15 (stable)", False), ("7.24.5 (stable)", False), ("7.20rc2 (testing)", False), ("8.0", False),
+    (None, False), ("", False),   # nieznana wersja — nie ostrzegamy na slepo
+])
+def test_routeros_too_old(ros, old):
+    assert pu.routeros_too_old(ros) is old
+
+
+def test_old_routeros_warnings_render():
+    """Ostrzezenia w szablonach: pulpit, plakietka na liscie, strona urzadzenia."""
+    from app.templating import templates
+    assert templates.env.globals["ros_min"] == "7.15"
+    tpl = templates.env.from_string(
+        "{% if ros_too_old(v) %}STARY {{ ros_min }}{% else %}OK{% endif %}")
+    assert tpl.render(v="7.13.5 (stable)") == "STARY 7.15" and tpl.render(v="7.24.5 (stable)") == "OK"

@@ -83,3 +83,5 @@ from app import timefmt as _timefmt  # noqa: E402
 templates.env.filters["dt"] = _timefmt.dt
 templates.env.globals["local_tz"] = _timefmt.local_zone_name  # funkcja: strefe da sie zmienic w locie
 templates.env.globals["portal_update_available"] = _portal_update.update_available
+templates.env.globals["ros_too_old"] = _portal_update.routeros_too_old
+templates.env.globals["ros_min"] = ".".join(map(str, _portal_update.MIN_ROUTEROS))

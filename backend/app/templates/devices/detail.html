@@ -24,6 +24,11 @@ na tym MikroTiku — to jedyny krok, który nadal wymaga ręcznej roboty.</p>
 {% endif %}
 
 {% if peer_warning %}<p class="error">{{ peer_warning }}</p>{% endif %}
+{% if ros_too_old(device.routeros_version) %}
+<p class="error"><strong>RouterOS {{ device.routeros_version }} jest starszy niż wymagane {{ ros_min }}.</strong>
+    Część funkcji portalu nie zadziała na tym urządzeniu (m.in. nazwane peery WireGuard, moduł WireGuard i Back To Home,
+    część odczytów przez REST). Zaktualizuj RouterOS — sekcja „Aktualizacje” niżej.</p>
+{% endif %}
 
 <div class="sections-toolbar">
     <button type="button" class="button-ghost button-sm" data-sections-all="open">Rozwiń wszystko</button>
@@ -349,6 +354,9 @@ na tym MikroTiku — to jedyny krok, który nadal wymaga ręcznej roboty.</p>
     <p class="hint">Skrypt konfiguracyjny (do ponownego wklejenia, jeśli trzeba):</p>
     {% endif %}
 
+    <p class="hint">Wymagany <strong>RouterOS {{ ros_min }} lub nowszy</strong>. Skrypt sam to sprawdza: na starszym
+    routerze wypisze komunikat „MTM: RouterOS … jest za stary” i <strong>niczego nie zmieni</strong>. Na końcu poprawnego
+    wykonania pojawia się „MTM: gotowe” — jeśli go nie ma, któreś polecenie zgłosiło błąd i reszta się nie wykonała.</p>
     <div class="code-block">
         <div class="code-head">
             <span>skrypt konfiguracyjny · Winbox / SSH</span>

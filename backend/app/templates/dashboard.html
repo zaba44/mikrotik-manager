@@ -49,6 +49,13 @@
     </div>
 </div>
 
+{% set ns = namespace(old=[]) %}
+{% for d in devices %}{% if ros_too_old(d.routeros_version) %}{% set ns.old = ns.old + [d] %}{% endif %}{% endfor %}
+{% if ns.old %}
+<p class="error"><strong>RouterOS starszy niż {{ ros_min }} na {{ ns.old | length }} {{ plural(ns.old | length, "urządzeniu", "urządzeniach", "urządzeniach") }}:</strong>
+    {% for d in ns.old %}<a href="/devices/{{ d.id }}">{{ d.name }}</a> ({{ d.routeros_version.split(" ")[0] }}){% if not loop.last %}, {% endif %}{% endfor %}.
+    Portal wymaga {{ ros_min }} lub nowszego — na starszych część funkcji nie działa. Zaktualizuj je (strona urządzenia → Aktualizacje).</p>
+{% endif %}
 <section class="panel glow-card">
     <div class="panel-head">
         <h2>
@@ -82,7 +89,7 @@
                 {% for device in devices %}
                 {% set status_weight = 3 if device.api_reachable else (2 if device.wg_reachable else (1 if device.last_polled_at else 0)) %}
                 <tr>
-                    <td><a href="/devices/{{ device.id }}">{{ device.name }}</a></td>
+                    <td><a href="/devices/{{ device.id }}">{{ device.name }}</a>{% if ros_too_old(device.routeros_version) %} <span class="pill pill-bad" title="RouterOS {{ device.routeros_version }} — portal wymaga {{ ros_min }} lub nowszego">RouterOS &lt; {{ ros_min }}</span>{% endif %}</td>
                     <td>{{ device.routeros_identity or "—" }}</td>
                     <td>{{ device.board_name or "—" }}{% if device.has_lte %} <span class="pill pill-info" title="Modem LTE/5G">LTE</span>{% endif %}</td>
                     <td>{% if device.location %}<a href="/locations/{{ device.location.id }}">{{ device.location.name }}</a>{% else %}—{% endif %}</td>

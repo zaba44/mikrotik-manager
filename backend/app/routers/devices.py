@@ -80,27 +80,60 @@ def ros_quote(value: str) -> str:
     return " ".join(out.split())
 
 
+# Sprawdzenie wersji na routerze — sprawdzone na zywym RouterOS: 7.13.5, 7.14.3, 7.14beta3, 7.9.2
+# i 6.49.10 -> za stary; 7.15, 7.15.1, 7.20rc2, 7.24.5, 8.0 -> dobry.
+_VERSION_CHECK = (
+    ':local v [/system resource get version]; :local d [:find $v "."]; '
+    ':local maj [:tonum [:pick $v 0 $d]]; :local r [:pick $v ($d + 1) [:len $v]]; :local e [:len $r]; '
+    ':foreach s in={"."; " "; "r"; "b"} do={:local f [:find $r $s]; '
+    ':if (([:typeof $f] != "nil") && ($f < $e)) do={:set e $f}}; '
+    ':local mn [:tonum [:pick $r 0 $e]]; '
+    ':if (!(($maj > 7) || (($maj = 7) && ($mn >= 15)))) do={'
+    ':put ("MTM: RouterOS " . $v . " jest za stary - portal wymaga 7.15 lub nowszego. '
+    'Zaktualizuj RouterOS (System > Packages > Check For Updates) i wklej skrypt ponownie. '
+    'Nic nie zostalo zmienione."); :error "MTM: za stary RouterOS"}'
+)
+
+
 def build_routeros_script(
     *, device_name: str, client_private_key: str, device_ip: str, api_username: str,
     api_password: str, preshared_key: str = "",
 ) -> str:
+    """Skrypt do wklejenia w terminal routera — CALY w jednym bloku `{ ... }`.
+
+    Dlaczego blok: wklejane linie terminal wykonuje po kolei i blad jednej nie zatrzymuje
+    nastepnych. Na RouterOS 7.13 (switch klienta, 2026-10-07) `name=` peera wywalilo sie
+    w polowie, a reszta zdazyla sie wykonac — zostala polowiczna konfiguracja. W bloku
+    pierwsza instrukcja sprawdza wersje i na zbyt starym routerze konczy `:error`, ZANIM
+    cokolwiek sie zmieni (sprawdzone: :error przerywa reszte bloku). Kazdy inny blad tez
+    przerywa reszte, a brak koncowego „MTM: gotowe" mowi, ze cos poszlo nie tak.
+    Blok rozwiazuje tez polykanie linii przez `/certificate sign`: terminal czyta caly blok,
+    zanim go wykona. Bez pustych linii i bez kontynuacji linii — najprostsza postac.
+    """
     wg_mask = wg.mask
     psk_arg = f' preshared-key="{preshared_key}"' if preshared_key else ""
-    return f"""/interface wireguard add name=wg-mt listen-port={CLIENT_LISTEN_PORT} private-key="{client_private_key}"
-/ip address add address={device_ip}/{wg_mask} interface=wg-mt
-/interface wireguard peers add interface=wg-mt name=mtm-hub public-key="{wg.server_public_key}"{psk_arg} \\
-    endpoint-address={wg.hub_endpoint} endpoint-port={settings.wg_port} \\
-    allowed-address={wg.subnet} persistent-keepalive=25s comment="{ros_quote(device_name)} - hub"
-
-/user group add name=mtm-api policy=read,write,test,sensitive,api,rest-api,reboot,policy
-/user add name={api_username} password="{api_password}" group=mtm-api address={wg.server_ip}/32
-
-{_fw_rule(f'protocol=icmp src-address={wg.server_ip}/32 in-interface=wg-mt action=accept comment="MTM: ping z huba"')}
-{_fw_rule(f'protocol=tcp dst-port=443 src-address={wg.server_ip}/32 in-interface=wg-mt action=accept comment="MTM: REST API z huba"')}
-
-/certificate add name=mtm-cert common-name={device_ip} days-valid=3650
-/certificate sign mtm-cert; :local w 0; :while (([/certificate get [find name=mtm-cert] private-key] != true) && ($w < 60)) do={{:delay 1s; :set w ($w + 1)}}; /ip service set www-ssl address={wg.server_ip}/32 certificate=mtm-cert disabled=no
-"""
+    lines = [
+        "{",
+        _VERSION_CHECK,
+        f'/interface wireguard add name=wg-mt listen-port={CLIENT_LISTEN_PORT} private-key="{client_private_key}"',
+        f"/ip address add address={device_ip}/{wg_mask} interface=wg-mt",
+        f'/interface wireguard peers add interface=wg-mt name=mtm-hub public-key="{wg.server_public_key}"{psk_arg} '
+        f"endpoint-address={wg.hub_endpoint} endpoint-port={settings.wg_port} "
+        f'allowed-address={wg.subnet} persistent-keepalive=25s comment="{ros_quote(device_name)} - hub"',
+        # grupa moze juz istniec (wczesniejsza rejestracja) — to nie powod, by przerywac
+        ":do {/user group add name=mtm-api policy=read,write,test,sensitive,api,rest-api,reboot,policy} on-error={}",
+        f'/user add name={api_username} password="{api_password}" group=mtm-api address={wg.server_ip}/32',
+        _fw_rule(f'protocol=icmp src-address={wg.server_ip}/32 in-interface=wg-mt action=accept comment="MTM: ping z huba"'),
+        _fw_rule(f'protocol=tcp dst-port=443 src-address={wg.server_ip}/32 in-interface=wg-mt action=accept '
+                 'comment="MTM: REST API z huba"'),
+        f"/certificate add name=mtm-cert common-name={device_ip} days-valid=3650",
+        "/certificate sign mtm-cert; :local w 0; :while (([/certificate get [find name=mtm-cert] private-key] != true) "
+        f"&& ($w < 60)) do={{:delay 1s; :set w ($w + 1)}}; "
+        f"/ip service set www-ssl address={wg.server_ip}/32 certificate=mtm-cert disabled=no",
+        ':put "MTM: gotowe - urzadzenie powinno pojawic sie w portalu w ciagu minuty."',
+        "}",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def _fw_rule(args: str) -> str:
@@ -110,17 +143,13 @@ def _fw_rule(args: str) -> str:
     w obu galeziach. Jedna linia, zeby wklejka w terminal nie zalezala od kontynuacji."""
     rule = f"/ip firewall filter add chain=input {args}"
     return f":if ([:len [/ip firewall filter find]] > 0) do={{{rule} place-before=0}} else={{{rule}}}"
-# Certyfikat i usluga HTTPS: dwie pulapki, obie z pierwszej instalacji produkcyjnej (2026-10-07).
+# Historia certyfikatu i uslugi HTTPS (pierwsza instalacja produkcyjna, 2026-10-07):
 #  1. `/ip service set www-ssl certificate=` przyjmuje tylko certyfikat PODPISANY — gdy `sign`
-#     stal na koncu skryptu, RouterOS odrzucal usluge („input does not match any value of
-#     certificate"): tunel wstawal, REST zostawal niedostepny.
-#  2. `/certificate sign` w terminalu wyswietla postep i POLYKA reszte wklejonego tekstu —
-#     gdy podpis przeniesiono wyzej, przepadly wszystkie linie po nim (usluga i reguly
-#     firewalla; potwierdzone na switchu CRS).
-# Dlatego podpis i usluga sa JEDNA, OSTATNIA linia (polecenia rozdzielone `;` sa czescia tej
-# samej linii wejscia, wiec terminal nie ma czego polknac), a reguly firewalla ida wczesniej.
-# Petla czeka na klucz prywatny (najwyzej 60 s) zamiast stalego `:delay` — na zywym routerze
-# podpis w skrypcie konczyl sie od razu, ale slabszy sprzet generuje klucz dluzej.
+#     stal na koncu skryptu, RouterOS odrzucal usluge: tunel wstawal, REST nie.
+#  2. `/certificate sign` w terminalu POLYKA reszte wklejonego tekstu — gdy podpis przeniesiono
+#     wyzej, przepadly linie po nim (usluga i firewall). 0.6.7–0.7.x: podpis i usluga jedna,
+#     ostatnia linia; od 0.7.6 caly skrypt to jeden blok, wiec problem znika u zrodla.
+# Petla czeka na klucz prywatny (najwyzej 60 s) zamiast stalego `:delay`.
 
 
 WINBOX_ADDRESS_LIST = "mtm-admin"

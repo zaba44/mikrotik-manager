@@ -217,6 +217,13 @@ def list_pre_update_backups() -> list[dict]:
 
 # ---- informacje do zakladki „O portalu" ----
 
+def routeros_too_old(value: str | None) -> bool:
+    """RouterOS ponizej wymaganego minimum (7.15). Nieznana wersja -> False (nie ostrzegamy
+    na slepo); wersje testowe (7.20rc2) wg numeru glownego."""
+    t = routeros_tuple(value)
+    return bool(t) and t[:2] < MIN_ROUTEROS
+
+
 def routeros_tuple(value: str | None) -> tuple[int, ...] | None:
     """`7.13.5 (stable)` -> (7, 13, 5)."""
     m = re.match(r"^\s*(\d+)\.(\d+)(?:\.(\d+))?", value or "")
