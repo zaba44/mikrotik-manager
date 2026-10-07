@@ -72,7 +72,7 @@ albo wgrać własny.
 ustaw w `.env` konkretną wersję:
 
 ```
-MTM_VERSION=0.6.4
+MTM_VERSION=0.6.5
 ```
 
 Aktualne wydania: zakładka *Releases* / tagi `v*` w repozytorium (w `.env` bez litery `v`).
@@ -111,6 +111,31 @@ Jak to jest zabezpieczone przed awarią w trakcie:
   ją sam co minutę i przy każdym starcie, aż hub potwierdzi tunel i trwały zapis wszystkich
   peerów. Do tego czasu w Ustawieniach widać baner „odtwarzanie niedokończone” z przyczyną
   i przyciskiem „Ponów teraz”.
+
+## Nie pamiętam hasła
+
+Hasło dowolnego konta zmienisz z serwera, bez logowania do panelu (w katalogu stacka):
+
+```bash
+docker compose exec backend python -m app.reset_password
+```
+
+Polecenie wypisze konta, zapyta o login i dwa razy o nowe hasło (wpisywane bez podglądu,
+nie zostaje w historii poleceń). Rola konta się nie zmienia, a jego zalogowane sesje wygasają.
+Login możesz podać od razu: `... python -m app.reset_password admin`.
+
+Gdy nie zostało żadne konto administratora (np. zostali sami operatorzy), załóż je albo nadaj
+istniejącemu kontu rolę administratora:
+
+```bash
+printf 'login\nhaslo\n' | docker compose exec -T backend python -m app.create_admin
+```
+
+Tu hasło zostaje w historii powłoki — potraktuj je jako tymczasowe i od razu zmień
+poleceniem `app.reset_password` albo w panelu (Moje konto).
+
+To jest uprawniona droga, nie furtka: kto ma dostęp do serwera, i tak ma pełną władzę nad
+portalem. Dlatego tym bardziej pilnuj samego serwera (SSH tylko na klucz).
 
 ## Wymagania wobec urządzeń
 
