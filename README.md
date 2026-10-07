@@ -17,6 +17,9 @@ Panel jest dostępny przez tunel; czy także z sieci hosta — decydujesz sam
   reguł firewalla na już wdrożonym sprzęcie.
 - **Aktualizacje** RouterOS i firmware: sprawdzanie w tle, ręczny trigger, sekwencyjnie
   po urządzeniach, z pomijaniem tych już aktualnych.
+- **Sprzęt i modemy LTE/5G**: model i numer seryjny każdego urządzenia, a przy modemie
+  siła i jakość sygnału (RSRP, RSRQ, SINR z oceną), operator, pasma i sprawdzanie
+  firmware modemu. Identyfikatorów karty SIM (IMSI, ICCID) i modemu portal nie zapisuje.
 - **Diagnostyka**: ping z urządzenia, kondycja (CPU, RAM, temperatury, napięcia,
   prędkości linków), dzierżawy DHCP, raport zdarzeń z logów routera.
 - **PoE per port**: stan, pobór mocy, napięcie i prąd na każdym porcie, zdalny restart
@@ -76,7 +79,7 @@ albo wgrać własny.
 ustaw w `.env` konkretną wersję:
 
 ```
-MTM_VERSION=0.7.2
+MTM_VERSION=0.7.3
 ```
 
 Aktualne wydania: zakładka *Releases* / tagi `v*` w repozytorium (w `.env` bez litery `v`).
@@ -101,7 +104,7 @@ proces); jej nowy obraz wchodzi przy najbliższym ręcznym `docker compose up -d
 **Ręcznie** (zawsze działa, także bez usługi `updater`):
 
 ```bash
-sed -i 's/^MTM_VERSION=.*/MTM_VERSION=0.7.2/' .env && docker compose pull && docker compose up -d
+sed -i 's/^MTM_VERSION=.*/MTM_VERSION=0.7.3/' .env && docker compose pull && docker compose up -d
 ```
 
 Migracje bazy wykonują się automatycznie przy starcie i działają tylko w przód — powrót do

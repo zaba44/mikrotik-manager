@@ -2,7 +2,7 @@
 # Pobierasz ten plik + Caddyfile + .env, uruchamiasz `docker compose up -d`
 # i przechodzisz kreator w przegladarce. Do pracy nad kodem sluzy infra/docker-compose.yml.
 #
-# MTM_VERSION przypnij do konkretnej wersji (np. 0.7.2) — `latest` moze sie zmienic
+# MTM_VERSION przypnij do konkretnej wersji (np. 0.7.3) — `latest` moze sie zmienic
 # w srodku tygodnia i zaskoczyc migracja bazy.
 services:
   wireguard:

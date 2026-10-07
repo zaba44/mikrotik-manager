@@ -78,12 +78,19 @@
 <section class="panel glow-card" style="max-width: 820px;">
     <div class="panel-head"><h2>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-        Flota — wersje RouterOS
+        Flota — modele i wersje RouterOS
     </h2></div>
     <dl class="kv-grid">
         <div class="kv"><dt>Urządzenia</dt><dd>{{ about.fleet.total }} (osiągalne przez API: {{ about.fleet.reachable }})</dd></div>
         <div class="kv"><dt>Wymagane minimum</dt><dd>RouterOS {{ about.fleet.min }}</dd></div>
+        <div class="kv"><dt>Z modemem LTE/5G</dt><dd>{{ about.fleet.lte }}</dd></div>
     </dl>
+    {% if about.fleet.models %}
+    <table style="margin-bottom:0.8rem;">
+        <thead><tr><th>Model</th><th>Urządzeń</th></tr></thead>
+        <tbody>{% for m, n in about.fleet.models %}<tr><td>{{ m }}</td><td>{{ n }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% endif %}
     {% if about.fleet.versions %}
     <table>
         <thead><tr><th>Wersja RouterOS</th><th>Urządzeń</th></tr></thead>

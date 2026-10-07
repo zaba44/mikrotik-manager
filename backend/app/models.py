@@ -45,6 +45,14 @@ class Device(Base):
     last_polled_at: Mapped[datetime.datetime | None]
 
     available_routeros_version: Mapped[str | None]
+    # Sprzet: board_name (nazwa handlowa, np. „hAP ax^2") z /system/resource przy kazdym
+    # odpytaniu; model (kod produktu, np. „C52iG-5HaxD2HaxD") i numer seryjny z
+    # /system/routerboard przy sprawdzaniu aktualizacji; has_lte — czy jest modem LTE/5G
+    # (None = jeszcze nie sprawdzano; /interface/lte bez modemu zwraca pusta liste).
+    board_name: Mapped[str | None]
+    model: Mapped[str | None]
+    serial_number: Mapped[str | None]
+    has_lte: Mapped[bool | None]
     current_firmware: Mapped[str | None]
     available_firmware: Mapped[str | None]
     routeros_winbox_port: Mapped[str | None]

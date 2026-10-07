@@ -1,4 +1,5 @@
 import datetime
+import re
 import os
 import uuid
 from urllib.parse import quote
@@ -29,7 +30,10 @@ from app.routeros_client import (
     get_device_health,
     get_dhcp_leases,
     get_poe,
+    get_lte,
     get_routerboard_info,
+    lte_firmware_check,
+    lte_present,
     poe_power_cycle,
     ping_from_device,
     reboot,
@@ -608,6 +612,31 @@ async def device_poe_fragment(request: Request, device_id: str, session: AsyncSe
     return await _poe_view(request, device)
 
 
+@router.get("/{device_id}/fragment/lte")
+async def device_lte_fragment(request: Request, device_id: str, session: AsyncSession = Depends(get_session)):
+    """Modem LTE/5G: jednorazowy odczyt monitora (siła i jakość sygnału, operator, pasma).
+    Tylko odczyt — na żądanie, przy otwarciu sekcji i przyciskiem „Odśwież”."""
+    device = await _poe_device(request, device_id, session, operate=False)
+    await session.close()
+    r = await get_lte(device)
+    return templates.TemplateResponse("_device_lte.html", {"request": request, "device": device, "r": r})
+
+
+@router.post("/{device_id}/lte/firmware-check")
+async def device_lte_firmware_check(request: Request, device_id: str, name: str = Form("lte1"),
+                                    session: AsyncSession = Depends(get_session)):
+    """Czy jest nowszy firmware modemu — BEZ instalowania (polecenie bez upgrade=yes)."""
+    require_admin(request)
+    device = await _poe_device(request, device_id, session, operate=False)
+    await session.close()
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,32}", name or ""):
+        raise HTTPException(status_code=400, detail="Zła nazwa interfejsu")
+    fw = await lte_firmware_check(device, name)
+    r = await get_lte(device)
+    return templates.TemplateResponse("_device_lte.html", {"request": request, "device": device, "r": r,
+                                                           "fw": fw, "fw_name": name})
+
+
 @router.post("/{device_id}/poe/set")
 async def device_poe_set(
     request: Request,
@@ -817,6 +846,12 @@ async def check_device_updates(
     if board_info["ok"]:
         device.current_firmware = board_info.get("current_firmware")
         device.available_firmware = board_info.get("upgrade_firmware")
+        device.model = board_info.get("model") or device.model
+        device.serial_number = board_info.get("serial") or device.serial_number
+
+    has_lte = await lte_present(device)
+    if has_lte is not None:
+        device.has_lte = has_lte
 
     await session.commit()
     return RedirectResponse(url=f"/devices/{device_id}", status_code=303)

@@ -70,6 +70,7 @@
                 <tr>
                     <th data-sort="text">Nazwa</th>
                     <th data-sort="text">Identity (MikroTik)</th>
+                    <th data-sort="text">Model</th>
                     <th data-sort="text">Lokalizacja</th>
                     <th data-sort="text">WG IP</th>
                     <th data-sort="number">Status</th>
@@ -83,6 +84,7 @@
                 <tr>
                     <td><a href="/devices/{{ device.id }}">{{ device.name }}</a></td>
                     <td>{{ device.routeros_identity or "—" }}</td>
+                    <td>{{ device.board_name or "—" }}{% if device.has_lte %} <span class="pill pill-info" title="Modem LTE/5G">LTE</span>{% endif %}</td>
                     <td>{% if device.location %}<a href="/locations/{{ device.location.id }}">{{ device.location.name }}</a>{% else %}—{% endif %}</td>
                     <td><span class="chip">{{ device.wg_ip }}</span></td>
                     <td data-sort-value="{{ status_weight }}">{% include "_status_badge.html" %}</td>

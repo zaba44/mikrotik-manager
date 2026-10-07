@@ -72,6 +72,7 @@ async def get_status(device: Device) -> dict:
                 "uptime": data.get("uptime"),
                 "identity": identity,
                 "winbox_port": winbox_port,
+                "board_name": data.get("board-name"),
                 "error": None,
             }
     except Exception as e:
@@ -90,6 +91,7 @@ async def get_routerboard_info(device: Device) -> dict:
                 "current_firmware": data.get("current-firmware"),
                 "upgrade_firmware": data.get("upgrade-firmware"),
                 "model": data.get("model"),
+                "serial": data.get("serial-number"),
             }
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
@@ -871,5 +873,65 @@ async def poe_power_cycle(device: Device, port_name: str, duration: str = "5s") 
                 if resp.status_code >= 400:
                     return {"ok": False, "error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
                 return {"ok": True, "error": None}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+# ---- Modem LTE/5G (szczegoly formatu i ustalenia ze sprzetu: app/lte.py) ----
+
+async def lte_present(device: Device) -> bool | None:
+    """Czy urzadzenie ma modem. Bez modemu `/interface/lte` zwraca pusta liste.
+    None = nie udalo sie sprawdzic (nie zgadujemy)."""
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=_TIMEOUT, auth=_auth(device)) as client:
+            resp = await client.get(f"{_base_url(device)}/rest/interface/lte")
+        if resp.status_code != 200:
+            return None
+        return len(resp.json()) > 0
+    except Exception:
+        return None
+
+
+async def get_lte(device: Device) -> dict:
+    """Modemy i jednorazowy odczyt monitora kazdego z nich. Identyfikatory (IMEI, IMSI,
+    ICCID) odrzuca app.lte.parse_monitor — dalej nie ida."""
+    from app import lte
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=20.0, auth=_auth(device)) as client:
+            resp = await client.get(f"{_base_url(device)}/rest/interface/lte")
+            resp.raise_for_status()
+            modems = []
+            for m in resp.json():
+                name = m.get("name")
+                row = {"name": name, "running": m.get("running") == "true",
+                       "disabled": m.get("disabled") == "true",
+                       "network_mode": m.get("network-mode"), "allow_roaming": m.get("allow-roaming"),
+                       "monitor": None, "error": None}
+                if not row["disabled"]:
+                    mon = await client.post(f"{_base_url(device)}/rest/interface/lte/monitor",
+                                            json={"numbers": name, "once": ""})
+                    if mon.status_code >= 400:
+                        row["error"] = f"HTTP {mon.status_code}: {mon.text[:120]}"
+                    else:
+                        row["monitor"] = lte.parse_monitor(mon.json())
+                modems.append(row)
+        return {"ok": True, "modems": modems}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}", "modems": []}
+
+
+async def lte_firmware_check(device: Device, name: str) -> dict:
+    """`/interface/lte/firmware-upgrade` BEZ upgrade=yes — tylko sprawdza wersje (modem pyta
+    serwery producenta, wiec moze to potrwac). Na terminalu zwraca installed/latest/status."""
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=90.0, auth=_auth(device)) as client:
+            resp = await client.post(f"{_base_url(device)}/rest/interface/lte/firmware-upgrade",
+                                     json={"numbers": name})
+        if resp.status_code >= 400:
+            return {"ok": False, "error": f"HTTP {resp.status_code}: {resp.text[:160]}"}
+        data = resp.json()
+        row = data[-1] if isinstance(data, list) and data else data if isinstance(data, dict) else {}
+        return {"ok": True, "installed": row.get("installed"), "latest": row.get("latest"),
+                "status": row.get("status"), "raw_keys": sorted(row)}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}

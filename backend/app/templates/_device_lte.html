@@ -1,0 +1,67 @@
+{% if not r.ok %}
+<p class="error" style="margin:0;">Nie udało się odczytać modemu: {{ r.error }}</p>
+{% elif not r.modems %}
+<div class="empty-state">To urządzenie nie ma modemu LTE/5G.</div>
+{% else %}
+{% set pill = {"ok": "pill-ok", "warn": "pill-warn", "bad": "pill-bad"} %}
+{% for m in r.modems %}
+<div style="margin-bottom:1rem;">
+    <p style="margin:0 0 0.5rem;"><code>{{ m.name }}</code>
+        {% if m.disabled %}<span class="pill pill-idle">wyłączony</span>
+        {% elif m.running %}<span class="pill pill-ok"><span class="dot"></span>połączony</span>
+        {% else %}<span class="pill pill-bad"><span class="dot"></span>brak połączenia</span>{% endif %}
+        {% if m.network_mode %}<span class="empty">· tryb sieci: {{ m.network_mode }}</span>{% endif %}
+        {% if m.allow_roaming %}<span class="empty">· roaming: {{ "dozwolony" if m.allow_roaming == "true" else "zablokowany" }}</span>{% endif %}
+    </p>
+    {% if m.error %}<p class="error">Odczyt monitora: {{ m.error }}</p>{% endif %}
+    {% set mon = m.monitor %}
+    {% if mon %}
+    {% if mon.signals %}
+    <div class="table-wrap table-fit">
+        <table>
+            <thead><tr><th>Sygnał</th><th>Wartość</th><th>Ocena</th></tr></thead>
+            <tbody>{% for s in mon.signals %}
+                <tr><td>{{ s.label }}</td>
+                    <td>{% if s.value is not none %}{{ s.value | round(1) | string | replace(".0", "") }} {{ s.unit }}{% else %}—{% endif %}</td>
+                    <td>{% if s.rating %}<span class="pill {{ pill[s.rating[0]] }}">{{ s.rating[1] }}</span>{% else %}<span class="empty">—</span>{% endif %}</td></tr>
+            {% endfor %}</tbody>
+        </table>
+    </div>
+    {% if mon.worst == "bad" %}<p class="hint">Bardzo słaby sygnał: zewnętrzna antena albo zmiana jej kierunku zwykle wyraźnie poprawia stabilność i przepustowość.</p>{% endif %}
+    {% endif %}
+    <dl class="kv-grid" style="margin-top:0.6rem;">
+        {% for label, value in mon.fields %}<div class="kv"><dt>{{ label }}</dt><dd>{{ value }}</dd></div>{% endfor %}
+        {% if mon.primary_band %}<div class="kv"><dt>Pasmo główne</dt><dd>{{ mon.primary_band.band }}{% if mon.primary_band.width %} · {{ mon.primary_band.width }}{% endif %}{% if mon.primary_band.earfcn %} · kanał {{ mon.primary_band.earfcn }}{% endif %}</dd></div>{% endif %}
+        <div class="kv"><dt>Agregacja pasm (CA)</dt><dd>{% if mon.ca_bands %}{% for b in mon.ca_bands %}{{ b.band }}{% if b.width %} ({{ b.width }}){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}brak{% endif %}</dd></div>
+    </dl>
+    {% if mon.other %}
+    <details style="margin-top:0.5rem;"><summary class="hint">Inne pola z modemu ({{ mon.other | length }})</summary>
+        <dl class="kv-grid">{% for k, v in mon.other %}<div class="kv"><dt>{{ k }}</dt><dd>{{ v }}</dd></div>{% endfor %}</dl>
+    </details>
+    {% endif %}
+    {% endif %}
+
+    {% if request.state.user and request.state.user.role == 'admin' %}
+    <form hx-post="/devices/{{ device.id }}/lte/firmware-check" hx-target="#lte-body" hx-swap="innerHTML"
+          hx-disabled-elt="find button" class="bare" style="margin-top:0.6rem;">
+        <input type="hidden" name="name" value="{{ m.name }}">
+        <button type="submit" class="button-ghost button-sm">Sprawdź firmware modemu</button>
+    </form>
+    {% if fw and fw_name == m.name %}
+        {% if fw.ok %}
+        <p class="{{ 'notice' if fw.latest and fw.installed and fw.latest != fw.installed else 'hint' }}" style="margin-top:0.5rem;">
+            Firmware modemu: zainstalowany {{ fw.installed or "?" }}, najnowszy {{ fw.latest or "?" }}{% if fw.status %} — {{ fw.status }}{% endif %}.
+            {% if fw.latest and fw.installed and fw.latest != fw.installed %}
+            Aktualizację wykonasz w terminalu routera: <code>/interface lte firmware-upgrade {{ m.name }} upgrade=yes</code>.
+            Uwaga: modem zrestartuje się, a jeśli tunel do portalu idzie przez to LTE, urządzenie zniknie na kilka minut.
+            {% endif %}
+        </p>
+        {% else %}
+        <p class="error" style="margin-top:0.5rem;">Sprawdzenie firmware nie powiodło się: {{ fw.error }}</p>
+        {% endif %}
+    {% endif %}
+    {% endif %}
+</div>
+{% endfor %}
+<p class="hint" style="margin:0;">Ocena według typowych progów LTE: RSRP od −80 dBm doskonały, poniżej −100 bardzo słaby; SINR od 20 dB doskonały, poniżej 0 bardzo słaby. Identyfikatory karty SIM i modemu (IMSI, ICCID, IMEI) portal celowo pomija.</p>
+{% endif %}

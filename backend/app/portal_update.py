@@ -271,7 +271,8 @@ async def collect_about() -> dict:
         db["head"] = _alembic_head()
         info["db"] = db
 
-        devices = (await s.execute(select(Device.name, Device.routeros_version, Device.api_reachable)
+        devices = (await s.execute(select(Device.name, Device.routeros_version, Device.api_reachable,
+                                          Device.board_name, Device.has_lte)
                                    .order_by(Device.name))).all()
         info["counts"] = {
             "users": (await s.execute(select(func.count()).select_from(User))).scalar(),
@@ -286,7 +287,11 @@ async def collect_about() -> dict:
 
     versions: dict[str, int] = {}
     too_old, unknown = [], []
-    for name, ros, _reachable in devices:
+    models: dict[str, int] = {}
+    for d in devices:
+        key = d.board_name or "nieznany (brak odczytu z urządzenia)"
+        models[key] = models.get(key, 0) + 1
+    for name, ros, _reachable, _board, _lte in devices:
         key = (ros or "").split(" ")[0] or "nieznana"
         versions[key] = versions.get(key, 0) + 1
         t = routeros_tuple(ros)
@@ -298,6 +303,8 @@ async def collect_about() -> dict:
         "total": len(devices), "reachable": sum(1 for d in devices if d[2]),
         "versions": sorted(versions.items(), key=lambda kv: routeros_tuple(kv[0]) or (0,), reverse=True),
         "too_old": too_old, "unknown": unknown, "min": ".".join(map(str, MIN_ROUTEROS)),
+        "models": sorted(models.items(), key=lambda kv: (-kv[1], kv[0])),
+        "lte": sum(1 for d in devices if d.has_lte),
     }
 
     status = await get_interface_status()

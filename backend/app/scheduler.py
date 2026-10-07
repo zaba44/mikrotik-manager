@@ -20,7 +20,7 @@ from app.log_store import (
     enforce_notification_retention,
     enforce_retention,
 )
-from app.routeros_client import check_for_updates, get_routerboard_info, get_status
+from app.routeros_client import check_for_updates, get_routerboard_info, get_status, lte_present
 from app.settings_store import get_int_setting, get_setting, set_setting
 from app.wg_agent_client import get_peers
 
@@ -70,7 +70,13 @@ async def poll_devices() -> None:
 
     async def _one(d):
         async with sem:
-            return await get_status(d)
+            status = await get_status(d)
+            # Modem LTE/5G sprawdzany JEDNORAZOWO (has_lte=None) — potem raz na dobe przy
+            # sprawdzaniu aktualizacji. Dokladanie zapytania do kazdego cyklu przy kilkuset
+            # urzadzeniach byloby marnotrawstwem, a modem nie pojawia sie co minute.
+            if status.get("reachable") and d.has_lte is None:
+                status["has_lte"] = await lte_present(d)
+            return status
 
     results = dict(zip((d.id for d in snapshot), await asyncio.gather(*(_one(d) for d in snapshot))))
 
@@ -96,6 +102,10 @@ async def poll_devices() -> None:
                 device.routeros_uptime = status["uptime"]
                 device.routeros_identity = status.get("identity")
                 device.routeros_winbox_port = status.get("winbox_port")
+                if status.get("board_name"):
+                    device.board_name = status["board_name"]
+                if status.get("has_lte") is not None:
+                    device.has_lte = status["has_lte"]
 
         # Peery administracyjne — status z tego samego dumpu wg (tylko handshake,
         # nie mają REST API do odpytania).
@@ -146,6 +156,12 @@ async def check_updates() -> None:
             if board_info["ok"]:
                 device.current_firmware = board_info.get("current_firmware")
                 device.available_firmware = board_info.get("upgrade_firmware")
+                device.model = board_info.get("model") or device.model
+                device.serial_number = board_info.get("serial") or device.serial_number
+
+            has_lte = await lte_present(device)
+            if has_lte is not None:
+                device.has_lte = has_lte
 
         await session.commit()
         count = len(devices)
