@@ -90,21 +90,24 @@ def build_routeros_script(
 /user group add name=mtm-api policy=read,write,test,sensitive,api,rest-api,reboot,policy
 /user add name={api_username} password="{api_password}" group=mtm-api address={wg.server_ip}/32
 
-/certificate add name=mtm-cert common-name={device_ip} days-valid=3650
-/certificate sign mtm-cert
-:delay 3s
-/ip service set www-ssl address={wg.server_ip}/32 certificate=mtm-cert disabled=no
 /ip firewall filter add chain=input protocol=icmp src-address={wg.server_ip}/32 \\
     in-interface=wg-mt action=accept place-before=0 comment="MTM: ping z huba"
 /ip firewall filter add chain=input protocol=tcp dst-port=443 src-address={wg.server_ip}/32 \\
     in-interface=wg-mt action=accept place-before=0 comment="MTM: REST API z huba"
+
+/certificate add name=mtm-cert common-name={device_ip} days-valid=3650
+/certificate sign mtm-cert; :delay 3s; /ip service set www-ssl address={wg.server_ip}/32 certificate=mtm-cert disabled=no
 """
-# Kolejnosc certyfikatu ma znaczenie: `/ip service set www-ssl certificate=` przyjmuje tylko
-# certyfikat PODPISANY. Dawniej `sign` stal na koncu skryptu i na RouterOS, ktory nie
-# przyjmuje szablonu, usluga konczyla sie bledem „input does not match any value of
-# certificate" — tunel wstawal, a REST zostawal niedostepny (pierwsza instalacja
-# produkcyjna, 2026-10-07). `:delay` na wypadek, gdy podpis konczy sie chwile po powrocie
-# polecenia (import skryptu zamiast wklejenia w terminal).
+# Certyfikat i usluga HTTPS: dwie pulapki, obie z pierwszej instalacji produkcyjnej (2026-10-07).
+#  1. `/ip service set www-ssl certificate=` przyjmuje tylko certyfikat PODPISANY — gdy `sign`
+#     stal na koncu skryptu, RouterOS odrzucal usluge („input does not match any value of
+#     certificate"): tunel wstawal, REST zostawal niedostepny.
+#  2. `/certificate sign` w terminalu wyswietla postep i POLYKA reszte wklejonego tekstu —
+#     gdy podpis przeniesiono wyzej, przepadly wszystkie linie po nim (usluga i reguly
+#     firewalla; potwierdzone na switchu CRS).
+# Dlatego podpis i usluga sa JEDNA, OSTATNIA linia (polecenia rozdzielone `;` sa czescia tej
+# samej linii wejscia, wiec terminal nie ma czego polknac), a reguly firewalla ida wczesniej.
+# `:delay` na wypadek, gdy podpis konczy sie chwile po powrocie polecenia.
 
 
 WINBOX_ADDRESS_LIST = "mtm-admin"

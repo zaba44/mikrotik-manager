@@ -15,11 +15,18 @@ def _script(monkeypatch):
 def test_certificate_signed_before_https_service_uses_it(monkeypatch):
     """`/ip service set www-ssl certificate=` przyjmuje tylko podpisany certyfikat — dawniej
     `sign` stal na koncu i na czesci routerow REST zostawal niedostepny."""
-    lines = _script(monkeypatch).splitlines()
-    sign = next(i for i, l in enumerate(lines) if l.startswith("/certificate sign mtm-cert"))
-    service = next(i for i, l in enumerate(lines) if l.startswith("/ip service set www-ssl"))
-    add = next(i for i, l in enumerate(lines) if l.startswith("/certificate add name=mtm-cert"))
-    assert add < sign < service
+    last = [l for l in _script(monkeypatch).splitlines() if l.strip()][-1]
+    assert last.index("/certificate sign mtm-cert") < last.index("/ip service set www-ssl")
+
+
+def test_nothing_follows_certificate_sign(monkeypatch):
+    """Terminal RouterOS w trakcie `sign` polyka reszte wklejonego tekstu — po linii z
+    podpisem nie moze byc juz zadnego polecenia (wczesniej ginely usluga i firewall)."""
+    lines = [l for l in _script(monkeypatch).splitlines() if l.strip()]
+    sign_line = next(i for i, l in enumerate(lines) if "/certificate sign" in l)
+    assert sign_line == len(lines) - 1
+    firewall = [i for i, l in enumerate(lines) if l.startswith("/ip firewall filter add")]
+    assert len(firewall) == 2 and max(firewall) < sign_line
 
 
 def test_script_uses_configured_hub(monkeypatch):
