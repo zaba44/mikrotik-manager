@@ -72,7 +72,7 @@ albo wgrać własny.
 ustaw w `.env` konkretną wersję:
 
 ```
-MTM_VERSION=0.6.7
+MTM_VERSION=0.6.8
 ```
 
 Aktualne wydania: zakładka *Releases* / tagi `v*` w repozytorium (w `.env` bez litery `v`).

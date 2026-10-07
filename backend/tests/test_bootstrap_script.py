@@ -25,8 +25,25 @@ def test_nothing_follows_certificate_sign(monkeypatch):
     lines = [l for l in _script(monkeypatch).splitlines() if l.strip()]
     sign_line = next(i for i, l in enumerate(lines) if "/certificate sign" in l)
     assert sign_line == len(lines) - 1
-    firewall = [i for i, l in enumerate(lines) if l.startswith("/ip firewall filter add")]
+    firewall = [i for i, l in enumerate(lines) if "/ip firewall filter add" in l]
     assert len(firewall) == 2 and max(firewall) < sign_line
+
+
+def test_firewall_rules_work_with_empty_filter_list(monkeypatch):
+    """`place-before=0` przy pustej liscie regul to „no such item" — regula nie powstawala
+    (switch CRS). Kazda regula ma galaz z place-before i bez, w jednej linii."""
+    rules = [l for l in _script(monkeypatch).splitlines() if "/ip firewall filter add" in l]
+    for line in rules:
+        assert line.startswith(":if ([:len [/ip firewall filter find]] > 0) do={")
+        do, other = line.split("} else={")
+        assert "place-before=0" in do and "place-before" not in other
+        assert do.split("do={")[1].replace(" place-before=0", "") == other.rstrip("}")
+
+
+def test_certificate_line_waits_for_private_key(monkeypatch):
+    last = [l for l in _script(monkeypatch).splitlines() if l.strip()][-1]
+    assert ":while (([/certificate get [find name=mtm-cert] private-key] != true) && ($w < 60))" in last
+    assert last.index(":while") < last.index("/ip service set www-ssl")
 
 
 def test_script_uses_configured_hub(monkeypatch):

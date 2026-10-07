@@ -90,14 +90,21 @@ def build_routeros_script(
 /user group add name=mtm-api policy=read,write,test,sensitive,api,rest-api,reboot,policy
 /user add name={api_username} password="{api_password}" group=mtm-api address={wg.server_ip}/32
 
-/ip firewall filter add chain=input protocol=icmp src-address={wg.server_ip}/32 \\
-    in-interface=wg-mt action=accept place-before=0 comment="MTM: ping z huba"
-/ip firewall filter add chain=input protocol=tcp dst-port=443 src-address={wg.server_ip}/32 \\
-    in-interface=wg-mt action=accept place-before=0 comment="MTM: REST API z huba"
+{_fw_rule(f'protocol=icmp src-address={wg.server_ip}/32 in-interface=wg-mt action=accept comment="MTM: ping z huba"')}
+{_fw_rule(f'protocol=tcp dst-port=443 src-address={wg.server_ip}/32 in-interface=wg-mt action=accept comment="MTM: REST API z huba"')}
 
 /certificate add name=mtm-cert common-name={device_ip} days-valid=3650
-/certificate sign mtm-cert; :delay 3s; /ip service set www-ssl address={wg.server_ip}/32 certificate=mtm-cert disabled=no
+/certificate sign mtm-cert; :local w 0; :while (([/certificate get [find name=mtm-cert] private-key] != true) && ($w < 60)) do={{:delay 1s; :set w ($w + 1)}}; /ip service set www-ssl address={wg.server_ip}/32 certificate=mtm-cert disabled=no
 """
+
+
+def _fw_rule(args: str) -> str:
+    """Regula wpuszczajaca ruch z huba, na GORZE listy — ale `place-before=0` przy PUSTEJ liscie
+    konczy sie „no such item" i regula nie powstaje (switch CRS, 2026-10-07). Stad `:if`:
+    lista niepusta -> na pozycje 0, pusta -> zwykle dodanie. Sprawdzone na zywym RouterOS
+    w obu galeziach. Jedna linia, zeby wklejka w terminal nie zalezala od kontynuacji."""
+    rule = f"/ip firewall filter add chain=input {args}"
+    return f":if ([:len [/ip firewall filter find]] > 0) do={{{rule} place-before=0}} else={{{rule}}}"
 # Certyfikat i usluga HTTPS: dwie pulapki, obie z pierwszej instalacji produkcyjnej (2026-10-07).
 #  1. `/ip service set www-ssl certificate=` przyjmuje tylko certyfikat PODPISANY — gdy `sign`
 #     stal na koncu skryptu, RouterOS odrzucal usluge („input does not match any value of
@@ -107,7 +114,8 @@ def build_routeros_script(
 #     firewalla; potwierdzone na switchu CRS).
 # Dlatego podpis i usluga sa JEDNA, OSTATNIA linia (polecenia rozdzielone `;` sa czescia tej
 # samej linii wejscia, wiec terminal nie ma czego polknac), a reguly firewalla ida wczesniej.
-# `:delay` na wypadek, gdy podpis konczy sie chwile po powrocie polecenia.
+# Petla czeka na klucz prywatny (najwyzej 60 s) zamiast stalego `:delay` — na zywym routerze
+# podpis w skrypcie konczyl sie od razu, ale slabszy sprzet generuje klucz dluzej.
 
 
 WINBOX_ADDRESS_LIST = "mtm-admin"
