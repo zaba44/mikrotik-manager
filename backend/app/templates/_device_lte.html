@@ -51,6 +51,7 @@
         {% if fw.ok %}
         <p class="{{ 'notice' if fw.latest and fw.installed and fw.latest != fw.installed else 'hint' }}" style="margin-top:0.5rem;">
             Firmware modemu: zainstalowany {{ fw.installed or "?" }}, najnowszy {{ fw.latest or "?" }}{% if fw.status %} — {{ fw.status }}{% endif %}.
+            {% if fw.pending %}Modem wciąż sprawdza dostępność aktualizacji — spróbuj ponownie za chwilę.{% endif %}
             {% if fw.latest and fw.installed and fw.latest != fw.installed %}
             Aktualizację wykonasz w terminalu routera: <code>/interface lte firmware-upgrade {{ m.name }} upgrade=yes</code>.
             Uwaga: modem zrestartuje się, a jeśli tunel do portalu idzie przez to LTE, urządzenie zniknie na kilka minut.

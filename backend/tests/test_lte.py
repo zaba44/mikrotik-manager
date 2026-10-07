@@ -114,5 +114,22 @@ def test_firmware_check_sends_parameters_routeros_accepts(monkeypatch):
                         lambda **kw: real(transport=httpx.MockTransport(handler), **{k: v for k, v in kw.items() if k != "verify"}))
     dev = Device(name="t", api_username="u", api_password_encrypted=encrypt("p"), wg_ip="10.0.0.2")
     r = asyncio.run(routeros_client.lte_firmware_check(dev, "lte1"))
-    assert sent == {"number": "lte1", "once": ""}
+    assert sent == {"number": "lte1", "duration": "15s"}
     assert r["ok"] and r["installed"] == "A.1" and r["latest"] == "A.2"
+
+
+@pytest.mark.parametrize("frames,latest,pending", [
+    # jak na produkcji: pierwsza klatka „checking...", potem wynik
+    ([{"installed": "A.1", "status": "checking..."},
+      {"installed": "A.1", "latest": "A.1", "status": "firmware is already up to date"}], "A.1", False),
+    ([{"installed": "A.1", "status": "checking..."}, {"installed": "A.1", "latest": "A.2", "status": "new firmware available"},
+      {"installed": "A.1", "latest": "A.2", "status": "new firmware available"}], "A.2", False),
+    ([{"installed": "A.1", "status": "checking..."}, {"installed": "A.1", "status": "checking..."}], None, True),
+    ({"installed": "A.1", "latest": "A.1", "status": "firmware is already up to date"}, "A.1", False),
+    ([], None, False),
+])
+def test_firmware_result_takes_finished_frame(frames, latest, pending):
+    from app.routeros_client import lte_firmware_result
+    r = lte_firmware_result(frames)
+    assert r["latest"] == latest and r["pending"] is pending
+

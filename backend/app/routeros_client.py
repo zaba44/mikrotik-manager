@@ -922,21 +922,35 @@ async def get_lte(device: Device) -> dict:
 
 async def lte_firmware_check(device: Device, name: str) -> dict:
     """`/interface/lte/firmware-upgrade` BEZ upgrade=yes — tylko sprawdza wersje (modem pyta
-    serwery producenta, wiec moze to potrwac). Na terminalu zwraca installed/latest/status.
+    serwery producenta, wiec to trwa kilka sekund).
 
     Parametry ustalone przez `/console/inspect` na RouterOS 7 (nie zgadywane): wskazanie
     modemu to `number` (LICZBA POJEDYNCZA — w `monitor` jest `numbers`; pierwsza wersja wyslala
-    `numbers` i dostala „unknown parameter numbers"), a polecenie dziala jak monitor, wiec
-    potrzebuje `once` — bez niego REST nie zwrocilby wyniku."""
+    `numbers` i dostala „unknown parameter numbers"). Polecenie dziala jak monitor: z `once`
+    zwraca PIERWSZA klatke, w ktorej `latest` jeszcze nie ma, a status to „checking..."
+    (druga wersja tak wlasnie utknela na produkcji). Dlatego `duration`: REST zwraca wszystkie
+    klatki z tego czasu, a my bierzemy ostatnia z rozstrzygnietym wynikiem."""
     try:
         async with httpx.AsyncClient(verify=False, timeout=90.0, auth=_auth(device)) as client:
             resp = await client.post(f"{_base_url(device)}/rest/interface/lte/firmware-upgrade",
-                                     json={"number": name, "once": ""})
+                                     json={"number": name, "duration": _LTE_FW_CHECK_SECONDS})
         if resp.status_code >= 400:
             return {"ok": False, "error": f"HTTP {resp.status_code}: {resp.text[:160]}"}
-        data = resp.json()
-        row = data[-1] if isinstance(data, list) and data else data if isinstance(data, dict) else {}
-        return {"ok": True, "installed": row.get("installed"), "latest": row.get("latest"),
-                "status": row.get("status"), "raw_keys": sorted(row)}
+        return {"ok": True, **lte_firmware_result(resp.json())}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+_LTE_FW_CHECK_SECONDS = "15s"
+
+
+def lte_firmware_result(data) -> dict:
+    """Klatki odpowiedzi -> wynik. Ostatnia klatka, w ktorej sprawdzanie sie zakonczylo
+    (jest `latest` albo status inny niz „checking"); gdy takiej nie ma — informacja, ze
+    sprawdzanie jeszcze trwa."""
+    frames = data if isinstance(data, list) else [data] if isinstance(data, dict) else []
+    frames = [f for f in frames if isinstance(f, dict)]
+    done = [f for f in frames if f.get("latest") or not str(f.get("status", "")).lower().startswith("checking")]
+    row = (done or frames or [{}])[-1]
+    return {"installed": row.get("installed"), "latest": row.get("latest"), "status": row.get("status"),
+            "pending": not done and bool(frames)}
