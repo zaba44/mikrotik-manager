@@ -167,12 +167,17 @@ def _stack() -> dict:
         return {"error": f"{type(e).__name__}: {e}"}
 
 
-def _containers(stack: dict) -> list[dict]:
+def _containers(stack: dict) -> list[dict] | None:
+    """Kontenery stacka. None = nie udalo sie odczytac (to NIE to samo co pusta lista —
+    kontrola po aktualizacji musi traktowac to jako porazke, a nie jako „nic nie odstaje")."""
     if "error" in stack:
-        return []
-    rc, out = _run(compose_base(stack) + ["ps", "-a", "--format", "json"], timeout=30)
+        return None
+    try:
+        rc, out = _run(compose_base(stack) + ["ps", "-a", "--format", "json"], timeout=30)
+    except Exception:
+        return None
     if rc != 0:
-        return []
+        return None
     rows = []
     for line in out.splitlines():  # compose v2+: jeden obiekt JSON na linie
         try:
@@ -184,11 +189,31 @@ def _containers(stack: dict) -> list[dict]:
     return sorted(rows, key=lambda r: r["service"] or "")
 
 
+def verify(rows: list[dict] | None, target: str) -> list[str]:
+    """Problemy po aktualizacji (pusta lista = OK). Wymagane sa OBIE uslugi, dzialajace na
+    obrazie z nowym numerem; nieudany odczyt stanu to porazka weryfikacji. Wczesniej brak
+    kontenera wireguard albo pusta odpowiedz `compose ps` konczyly sie stanem „done"
+    (wytkniete w recenzji 0.7.6)."""
+    if rows is None:
+        return ["nie udalo sie odczytac stanu kontenerow (docker compose ps)"]
+    by_service = {r["service"]: r for r in rows}
+    problems = []
+    for service in SERVICES:
+        c = by_service.get(service)
+        if c is None:
+            problems.append(f"brak kontenera {service}")
+        elif c["state"] != "running" or not (c["image"] or "").endswith(f":{target}"):
+            problems.append(f"{service}: {c['image']} {c['state']}")
+    return problems
+
+
 # ---- aktualizacja ----
 
 def _update(target: str) -> None:
     stack = _stack()
     env_path = f"{STACK_DIR}/.env"
+    original = None
+    containers_touched = False  # po `up` przywracanie .env rozjechaloby plik z kontenerami
     try:
         if "error" in stack:
             raise RuntimeError(stack["error"])
@@ -207,10 +232,10 @@ def _update(target: str) -> None:
         for line in out.splitlines()[-15:]:
             _log("  " + line)
         if rc != 0:
-            _write_like(env_path, original, env_path)
-            raise RuntimeError(f"pobranie obrazow {target} nie powiodlo sie — .env przywrocone, nic nie zmieniono")
+            raise RuntimeError(f"pobranie obrazow {target} nie powiodlo sie")
 
         _log("odtwarzam kontenery backend i wireguard (tunel floty zerwie sie na kilka sekund)...")
+        containers_touched = True
         rc, out = _run(compose_base(stack) + ["up", "-d", "--no-deps", *SERVICES])
         for line in out.splitlines()[-15:]:
             _log("  " + line)
@@ -218,16 +243,24 @@ def _update(target: str) -> None:
             raise RuntimeError("docker compose up nie powiodl sie — szczegoly w dzienniku powyzej")
 
         time.sleep(5)
-        wrong = [c for c in _containers(stack) if c["service"] in SERVICES
-                 and (c["state"] != "running" or not (c["image"] or "").endswith(f":{target}"))]
-        if wrong:
-            raise RuntimeError("po aktualizacji kontenery nie dzialaja na nowej wersji: " +
-                               ", ".join(f"{c['service']} {c['image']} {c['state']}" for c in wrong))
+        problems = verify(_containers(stack), target)
+        if problems:
+            raise RuntimeError("po aktualizacji: " + "; ".join(problems))
         _log(f"gotowe: backend i wireguard dzialaja na {target}")
         _state.update({"state": "done", "finished_at": _now()})
     except Exception as e:
-        _log(f"BLAD: {e}")
-        _state.update({"state": "failed", "error": str(e), "finished_at": _now()})
+        # KAZDY blad przed odtworzeniem kontenerow (takze wyjatek, np. przekroczony czas
+        # pobierania) przywraca .env — dawniej tylko niezerowy kod wyjscia, a TimeoutExpired
+        # zostawial nowa wersje w .env (wytkniete w recenzji 0.7.6).
+        message = f"{type(e).__name__}: {e}" if not isinstance(e, RuntimeError) else str(e)
+        if original is not None and not containers_touched:
+            try:
+                _write_like(env_path, original, env_path)
+                message += " — .env przywrocone, nic nie zmieniono"
+            except Exception as restore_error:
+                message += f" — NIE udalo sie przywrocic .env ({restore_error}); poprzednia tresc w .env.bak"
+        _log(f"BLAD: {message}")
+        _state.update({"state": "failed", "error": message, "finished_at": _now()})
     finally:
         _save()
         _lock.release()

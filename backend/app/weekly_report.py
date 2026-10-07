@@ -20,6 +20,7 @@ from app.mailer import send_mail
 from app.models import Backup, Device, DeviceLogEntry, Notification
 from app.notifications import override_summary
 from app.settings_store import get_setting, set_setting
+from app.timefmt import dt, utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +28,11 @@ _LAST_RUN_KEY = "notify_weekly_report_last"
 
 
 async def build_weekly_report(session) -> str:
-    now = datetime.datetime.now()
+    now = utcnow()  # okna zapytan i wiek wyciszen liczone wzgledem bazy, ktora jest w UTC
     week = now - datetime.timedelta(days=7)
     lines = [
         "MikroTik Manager — raport tygodniowy",
-        f"Wygenerowany: {now:%Y-%m-%d %H:%M}",
+        f"Wygenerowany: {dt(now)}",  # dla czytelnika: czas lokalny portalu
         "",
     ]
 

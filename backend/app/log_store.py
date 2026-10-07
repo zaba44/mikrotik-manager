@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Device, DeviceLogEntry, Notification
 from app.settings_store import get_int_setting
+from app.timefmt import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ async def enforce_retention(session: AsyncSession) -> int:
     days = await get_int_setting(session, "syslog_retention_days")
     if days <= 0:
         return 0
-    cutoff = datetime.datetime.now() - datetime.timedelta(days=days)
+    cutoff = utcnow() - datetime.timedelta(days=days)  # received_at/created_at w bazie: UTC
     result = await session.execute(
         delete(DeviceLogEntry).where(DeviceLogEntry.received_at < cutoff)
     )
@@ -135,7 +136,7 @@ async def enforce_notification_retention(session: AsyncSession) -> int:
     days = await get_int_setting(session, "notify_retention_days")
     if days <= 0:
         return 0
-    cutoff = datetime.datetime.now() - datetime.timedelta(days=days)
+    cutoff = utcnow() - datetime.timedelta(days=days)  # received_at/created_at w bazie: UTC
     result = await session.execute(
         delete(Notification).where(Notification.created_at < cutoff)
     )

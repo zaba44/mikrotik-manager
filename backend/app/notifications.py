@@ -103,7 +103,7 @@ async def _log(session, *, event_key, dedup_key, device_id, subject, status, rea
 
 async def _blocked_reason(session, *, event_key, dedup_key, device_id) -> str | None:
     """Zwraca powód wyciszenia albo None, gdy można wysłać."""
-    now = datetime.datetime.now()
+    now = utcnow()  # created_at w bazie jest w UTC — czas lokalny przesuwal okna o 1–2 h
 
     dedup_minutes = await get_int_setting(session, "notify_dedup_minutes")
     if dedup_minutes > 0:
@@ -188,8 +188,8 @@ async def recent_notifications(session: AsyncSession, limit: int = 50):
 
 
 async def notification_stats(session: AsyncSession) -> dict:
-    hour_ago = datetime.datetime.now() - datetime.timedelta(hours=1)
-    day_ago = datetime.datetime.now() - datetime.timedelta(days=1)
+    hour_ago = utcnow() - datetime.timedelta(hours=1)  # porownanie z created_at (UTC)
+    day_ago = utcnow() - datetime.timedelta(days=1)
 
     async def count(*conditions):
         return (await session.execute(

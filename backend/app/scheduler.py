@@ -5,6 +5,7 @@ import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 
+from app.timefmt import utc_now_aware
 from app.backup_service import run_all_backups
 from app import local_address
 from app import portal_update
@@ -201,33 +202,37 @@ async def backup_scheduler_tick() -> None:
 
 
 def start_scheduler() -> AsyncIOScheduler:
-    scheduler = AsyncIOScheduler()
+    # Harmonogram ZAWSZE w UTC, a terminy jako czas ze strefa (timefmt.utc_now_aware). Bez tego
+    # strefa harmonogramu zostawala ta z chwili startu, a po zmianie strefy panelu zadanie
+    # „teraz" (czas lokalny bez strefy) dostawalo termin o 2 h w przeszlosci i bylo pomijane
+    # (wytkniete w recenzji 0.7.6).
+    scheduler = AsyncIOScheduler(timezone=datetime.timezone.utc)
     scheduler.add_job(
         poll_devices,
         "interval",
         seconds=settings.poll_interval_seconds,
-        next_run_time=datetime.datetime.now(),
+        next_run_time=utc_now_aware(),
         id="poll_devices",
     )
     scheduler.add_job(
         check_updates,
         "interval",
         hours=24,
-        next_run_time=datetime.datetime.now(),
+        next_run_time=utc_now_aware(),
         id="check_updates",
     )
     scheduler.add_job(
         backup_scheduler_tick,
         "interval",
         hours=1,
-        next_run_time=datetime.datetime.now(),
+        next_run_time=utc_now_aware(),
         id="backup_scheduler_tick",
     )
     scheduler.add_job(
         syslog_retention_tick,
         "interval",
         hours=24,
-        next_run_time=datetime.datetime.now(),
+        next_run_time=utc_now_aware(),
         id="syslog_retention_tick",
     )
     # Adresy LAN praktycznie sie nie zmieniaja, wiec dokladanie ich do cyklu minutowego
@@ -236,14 +241,14 @@ def start_scheduler() -> AsyncIOScheduler:
         local_address.refresh_all,
         "interval",
         hours=1,
-        next_run_time=datetime.datetime.now(),
+        next_run_time=utc_now_aware(),
         id="local_address_refresh",
     )
     scheduler.add_job(
         wg_snapshot.purge_old,
         "interval",
         hours=24,
-        next_run_time=datetime.datetime.now(),
+        next_run_time=utc_now_aware(),
         id="wg_snapshot_purge",
     )
     # Odtwarzanie kopii, ktorego tunel albo peery nie weszly (agent niedostepny itp.),
@@ -254,7 +259,7 @@ def start_scheduler() -> AsyncIOScheduler:
         portal_update.check_quietly,
         "interval",
         hours=24,
-        next_run_time=datetime.datetime.now() + datetime.timedelta(minutes=2),
+        next_run_time=utc_now_aware() + datetime.timedelta(minutes=2),
         id="portal_update_check",
     )
     scheduler.add_job(
@@ -267,7 +272,7 @@ def start_scheduler() -> AsyncIOScheduler:
         weekly_report_tick,
         "interval",
         hours=1,  # sam job sprawdza dzien i godzine + znacznik ostatniej wysylki
-        next_run_time=datetime.datetime.now(),
+        next_run_time=utc_now_aware(),
         id="weekly_report_tick",
     )
     scheduler.start()

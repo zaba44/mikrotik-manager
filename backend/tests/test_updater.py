@@ -114,7 +114,7 @@ def test_failed_pull_restores_env_and_touches_nothing(up, monkeypatch):
 def test_wrong_image_after_up_is_failure(up, monkeypatch):
     docker = _Docker(up, image_tag="0.6.8")  # kontenery wstaly, ale na starym obrazie
     state = _go(up, docker, monkeypatch)
-    assert state["state"] == "failed" and "nowej wersji" in state["error"]
+    assert state["state"] == "failed" and "wireguard: ghcr.io/x/mtm-wireguard:0.6.8 running" in state["error"]
 
 
 @pytest.mark.parametrize("name,ok", [
@@ -126,3 +126,61 @@ def test_updater_zone_only_real_names(up, monkeypatch, name, ok):
     monkeypatch.setenv("TZ", "UTC")
     assert up.apply_zone(name) is ok
     assert os.environ["TZ"] == ("Europe/Warsaw" if ok else "UTC")
+
+
+# ---- recenzja 0.7.6 ----
+
+class _Docker2(_Docker):
+    """Atrapa z awariami: wyjatek przy pobieraniu, brakujaca usluga, nieudany `ps`."""
+
+    def __init__(self, up, *, pull_exc=None, ps_services=("backend", "wireguard", "postgres"), ps_rc=0, ps_exc=None):
+        super().__init__(up)
+        self.pull_exc, self.ps_services, self.ps_rc, self.ps_exc = pull_exc, ps_services, ps_rc, ps_exc
+
+    def run(self, cmd, timeout=900):
+        self.calls.append(cmd)
+        if "pull" in cmd:
+            if self.pull_exc:
+                raise self.pull_exc
+            return 0, "Pulled"
+        if "up" in cmd:
+            return 0, "Recreated"
+        if "ps" in cmd:
+            if self.ps_exc:
+                raise self.ps_exc
+            tag = self.up.env_version((self.up.stack_dir / ".env").read_text())
+            return self.ps_rc, "\n".join(json.dumps({"Service": s, "Image": f"ghcr.io/x/mtm-{s}:{tag}", "State": "running"})
+                                         for s in self.ps_services)
+        return 0, ""
+
+
+def test_pull_timeout_restores_env(up, monkeypatch):
+    """TimeoutExpired przy pobieraniu: dawniej .env zostawal z nowa wersja."""
+    import subprocess
+    docker = _Docker2(up, pull_exc=subprocess.TimeoutExpired(["docker", "compose", "pull"], 900))
+    state = _go(up, docker, monkeypatch)
+    assert state["state"] == "failed" and "TimeoutExpired" in state["error"] and "przywrocone" in state["error"]
+    assert "MTM_VERSION=0.6.8" in (up.stack_dir / ".env").read_text()
+    assert not any("up" in c for c in docker.calls)
+
+
+@pytest.mark.parametrize("kwargs,why", [
+    ({"ps_services": ("backend", "postgres")}, "brak kontenera wireguard"),       # brakujaca usluga
+    ({"ps_services": ()}, "brak kontenera backend"),                              # pusta lista
+    ({"ps_rc": 1}, "nie udalo sie odczytac stanu"),                               # compose ps blad
+    ({"ps_exc": RuntimeError("socket")}, "nie udalo sie odczytac stanu"),         # compose ps wyjatek
+])
+def test_verification_requires_both_services(up, monkeypatch, kwargs, why):
+    """Dawniej brak kontenera albo pusta odpowiedz `compose ps` konczyly sie stanem „done"."""
+    state = _go(up, _Docker2(up, **kwargs), monkeypatch)
+    assert state["state"] == "failed" and why in state["error"]
+    # po `up` .env NIE jest cofany — kontenery juz dzialaja na nowej wersji
+    assert "MTM_VERSION=0.6.9" in (up.stack_dir / ".env").read_text()
+
+
+def test_verify_unit(up):
+    ok = [{"service": "backend", "image": "x:0.6.9", "state": "running"},
+          {"service": "wireguard", "image": "x:0.6.9", "state": "running"}]
+    assert up.verify(ok, "0.6.9") == []
+    assert up.verify(None, "0.6.9") and up.verify([], "0.6.9")
+    assert up.verify([ok[0], {**ok[1], "image": "x:0.6.8"}], "0.6.9") == ["wireguard: x:0.6.8 running"]

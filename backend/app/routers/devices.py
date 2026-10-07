@@ -10,6 +10,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.timefmt import utc_now_aware
 from app.ros_text import ros_ascii
 from app.auth import can_operate, is_admin, require_admin, require_location, require_operate_location
 from app.backup_service import backup_device
@@ -901,7 +902,7 @@ async def start_device_update(
         raise HTTPException(status_code=400, detail="Nieprawidłowy tryb aktualizacji")
 
     request.app.state.scheduler.add_job(
-        run_device_update, args=[device.id, mode], next_run_time=datetime.datetime.now()
+        run_device_update, args=[device.id, mode], next_run_time=utc_now_aware()
     )
     return RedirectResponse(url=f"/devices/{device_id}", status_code=303)
 
@@ -1008,7 +1009,7 @@ async def trigger_device_backup(
         raise HTTPException(status_code=404, detail="Nie znaleziono urządzenia")
 
     request.app.state.scheduler.add_job(
-        backup_device, args=[device.id], next_run_time=datetime.datetime.now()
+        backup_device, args=[device.id], next_run_time=utc_now_aware()
     )
     return RedirectResponse(url=f"/devices/{device_id}", status_code=303)
 

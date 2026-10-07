@@ -78,6 +78,12 @@ def utcnow() -> datetime.datetime:
     return datetime.datetime.now(UTC).replace(tzinfo=None)
 
 
+def utc_now_aware() -> datetime.datetime:
+    """Teraz w UTC ZE strefa — dla terminow w harmonogramie (APScheduler pracuje w UTC).
+    Czas bez strefy harmonogram interpretowalby po swojemu, a strefa panelu zmienia sie w locie."""
+    return datetime.datetime.now(UTC)
+
+
 def to_local(value):
     """datetime (bez strefy = UTC) albo tekst ISO -> datetime w strefie panelu.
     Sama data (bez godziny) wraca bez zmian; puste i nieczytelne -> None."""

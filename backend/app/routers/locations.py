@@ -8,6 +8,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.timefmt import utc_now_aware
 from app.auth import current_user, is_admin, require_location, require_operate_location
 from app.database import get_session
 from app.log_report import build_report, content_disposition
@@ -232,7 +233,7 @@ async def start_location_update(request: Request, location_id: str, session: Asy
     require_operate_location(request, location.id)
 
     request.app.state.scheduler.add_job(
-        run_location_update, args=[location.id], next_run_time=datetime.datetime.now()
+        run_location_update, args=[location.id], next_run_time=utc_now_aware()
     )
     return RedirectResponse(url=f"/locations/{location_id}", status_code=303)
 

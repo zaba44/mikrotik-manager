@@ -22,8 +22,6 @@ secrets/
 migration/
 *.tar.gz
 
-# Mirror certów/eksportów z hosta (nie źródło projektu, zawiera klucze prywatne)
-DEBIAN_192_168_144_66/
 
 # Dziennik prac autora (lab, decyzje, recenzje) — tylko lokalnie, nie publikujemy
 PROJECT_BRIEF.md
