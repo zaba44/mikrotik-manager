@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ros_text import ros_ascii
 from app.auth import require_admin
 from app.database import get_session
 from app.filenames import content_disposition
@@ -179,12 +180,14 @@ async def comment_save(request: Request, device_id: str, iface: str = Form(...),
     await snapshot.save(device.id, operation=f"przed zmianą komentarza peera {peer.display_name} na {iface}",
                         scope=f"wireguard:{iface}",
                         items=[snapshot.peer_record(p) for p in view["peers"]])
+    sent = ros_ascii(comment)  # RouterOS gubi/psuje polskie znaki — zob. app/ros_text.py
     try:
-        await writes.set_peer_comment(device, pid, comment.strip())
+        await writes.set_peer_comment(device, pid, sent)
     except Exception as e:
         return _render(request, "routerwg/_comment.html", {**ctx, "error": f"Nie udało się zapisać: {e}"})
-    peer.comment = comment.strip()
-    resp = _render(request, "routerwg/_comment.html", {**ctx, "notice": "Komentarz zapisany."})
+    peer.comment = sent
+    notice = "Komentarz zapisany." + (f" Na routerze bez polskich znaków: „{sent}”." if sent != comment.strip() else "")
+    resp = _render(request, "routerwg/_comment.html", {**ctx, "notice": notice})
     resp.headers["HX-Trigger"] = "wg-refresh"  # tabela odswiezy sie od razu, nie po 15 s
     return resp
 

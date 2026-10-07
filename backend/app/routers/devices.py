@@ -9,6 +9,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ros_text import ros_ascii
 from app.auth import can_operate, is_admin, require_admin, require_location, require_operate_location
 from app.backup_service import backup_device
 from app.config import settings
@@ -69,7 +70,7 @@ def ros_quote(value: str) -> str:
     pomoc zamiast wpisac znak). Nazwy nadaje uzytkownik — `Biuro "Parter"` psulo caly
     skrypt (wytkniete w recenzji zewnetrznej). Znaki konca linii zamieniamy na spacje:
     w komentarzu i tak nie maja sensu, a urwalyby polecenie w pol."""
-    out = str(value or "")
+    out = ros_ascii(value)  # bez polskich znakow: terminal RouterOS je gubi („GÓRA" -> „GRA")
     for ch in ("\\", '"', "$", "?"):
         out = out.replace(ch, "\\" + ch)
     return " ".join(out.split())

@@ -21,7 +21,7 @@ from app.templating import _Templates, plural
     ("koszt $5?", "koszt \\$5\\?"),
     ("C:\\dane", "C:\\\\dane"),
     ("dwie\nlinie", "dwie linie"),
-    ("AP DÓŁ", "AP DÓŁ"),
+    ("AP DÓŁ", "AP DOL"),                  # terminal RouterOS gubi polskie znaki
 ])
 def test_ros_quote(raw, quoted):
     assert ros_quote(raw) == quoted

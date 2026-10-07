@@ -72,7 +72,7 @@ albo wgrać własny.
 ustaw w `.env` konkretną wersję:
 
 ```
-MTM_VERSION=0.7.0
+MTM_VERSION=0.7.1
 ```
 
 Aktualne wydania: zakładka *Releases* / tagi `v*` w repozytorium (w `.env` bez litery `v`).
@@ -97,7 +97,7 @@ proces); jej nowy obraz wchodzi przy najbliższym ręcznym `docker compose up -d
 **Ręcznie** (zawsze działa, także bez usługi `updater`):
 
 ```bash
-sed -i 's/^MTM_VERSION=.*/MTM_VERSION=0.7.0/' .env && docker compose pull && docker compose up -d
+sed -i 's/^MTM_VERSION=.*/MTM_VERSION=0.7.1/' .env && docker compose pull && docker compose up -d
 ```
 
 Migracje bazy wykonują się automatycznie przy starcie i działają tylko w przód — powrót do

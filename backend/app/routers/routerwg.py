@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ros_text import ros_ascii
 from app.auth import is_admin, require_admin, require_location
 from app.database import get_session
 from app.filenames import content_disposition
@@ -263,11 +264,13 @@ async def bth_user_comment(request: Request, device_id: str, uid: str = Form(...
     if user is None:
         return _back(device, err="Ten użytkownik zniknął z routera — odśwież stronę.")
     await _bth_snapshot(device, f"przed zmianą komentarza użytkownika BTH {user.get('name')}", state)
+    sent = ros_ascii(comment)  # RouterOS gubi/psuje polskie znaki — zob. app/ros_text.py
     try:
-        await bth_api.set_user_comment(device, uid, comment.strip())
+        await bth_api.set_user_comment(device, uid, sent)
     except Exception as e:
         return _back(device, err=f"Nie udało się zmienić komentarza: {e}")
-    return _back(device, msg=f"Komentarz użytkownika {user.get('name')} zapisany.")
+    converted = f" Na routerze bez polskich znaków: „{sent}”." if sent != comment.strip() else ""
+    return _back(device, msg=f"Komentarz użytkownika {user.get('name')} zapisany.{converted}")
 
 
 @router.get("/{device_id}/bth/config", response_class=HTMLResponse)
