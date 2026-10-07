@@ -3,6 +3,7 @@ więc trzymany w jednym miejscu zamiast duplikowany w dwóch routerach."""
 import datetime
 
 from app.notifications import set_override
+from app.timefmt import utcnow
 
 
 async def apply_scope_form(session, scope_type: str, scope_id, form) -> None:
@@ -10,7 +11,7 @@ async def apply_scope_form(session, scope_type: str, scope_id, form) -> None:
     if mode == "muted":
         hours = int(form.get("mute_hours") or 0)
         # 0 = bezterminowo (NULL) — świadomy wybór, wyróżniany w zestawieniu i raporcie
-        until = datetime.datetime.now() + datetime.timedelta(hours=hours) if hours else None
+        until = utcnow() + datetime.timedelta(hours=hours) if hours else None  # w bazie UTC
         await set_override(session, scope_type, scope_id, mode="muted", muted_until=until)
     elif mode == "custom":
         events = form.getlist("events") if hasattr(form, "getlist") else form.get("events", [])

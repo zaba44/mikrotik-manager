@@ -75,7 +75,7 @@
                         {% elif peer.wg_reachable %}<span class="pill pill-ok"><span class="dot"></span>online</span>
                         {% else %}<span class="pill pill-bad"><span class="dot"></span>offline</span>{% endif %}
                     </td>
-                    <td>{{ peer.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+                    <td>{{ peer.created_at | dt("%Y-%m-%d %H:%M") }}</td>
                     <td>
                         <span class="actions-row">
                             <a href="/settings/admin-peers/{{ peer.id }}/config">pobierz .conf</a>

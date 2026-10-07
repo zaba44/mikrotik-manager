@@ -142,10 +142,10 @@
                     <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
                     <td>{% if row.override.mode == 'muted' %}
                             {% if row.forever %}<span class="pill pill-warn">wyciszone bezterminowo</span>
-                            {% else %}<span class="pill pill-idle">wyciszone do {{ row.override.muted_until.strftime("%m-%d %H:%M") }}</span>{% endif %}
+                            {% else %}<span class="pill pill-idle">wyciszone do {{ row.override.muted_until | dt("%m-%d %H:%M") }}</span>{% endif %}
                         {% else %}<span class="pill pill-info">własne</span>
                             <span class="empty">{{ row.events | length }} typów</span>{% endif %}</td>
-                    <td class="empty cell-nowrap">{{ row.override.created_at.strftime("%m-%d %H:%M") }}</td>
+                    <td class="empty cell-nowrap">{{ row.override.created_at | dt("%m-%d %H:%M") }}</td>
                     <td><form method="post" action="/settings/notifications/override/{{ row.override.id }}/delete" class="bare">
                         <button type="submit" class="button-ghost button-sm">przywróć domyślne</button></form></td>
                 </tr>
@@ -167,7 +167,7 @@
             <tbody>
                 {% for n in recent %}
                 <tr>
-                    <td class="empty cell-nowrap">{{ n.created_at.strftime("%m-%d %H:%M:%S") }}</td>
+                    <td class="empty cell-nowrap">{{ n.created_at | dt("%m-%d %H:%M:%S") }}</td>
                     <td class="empty" style="font-family:var(--mono); font-size:0.76rem;">{{ n.event_key }}</td>
                     <td>{{ n.subject }}</td>
                     <td>{% if n.status == 'sent' %}<span class="pill pill-ok">wysłane</span>

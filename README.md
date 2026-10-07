@@ -61,6 +61,10 @@ docker compose logs backend | grep TOKEN
 Bez niego ktoś, kto dotarłby do panelu przed Tobą, mógłby założyć pierwsze konto
 administratora i przejąć portal. Token działa tylko do momentu założenia portalu.
 
+Daty w panelu są w strefie **Europe/Warsaw** (z automatycznym czasem letnim i zimowym); inną
+strefę wybierzesz w **Ustawienia → O portalu**. Baza przechowuje czasy w UTC, a kontenery nie
+dziedziczą strefy hosta — dlatego to ustawienie portalu, a nie systemu.
+
 Przeglądarka ostrzeże o certyfikacie, bo pochodzi z wbudowanego urzędu certyfikacji
 portalu. W zakładce **Ustawienia → Certyfikat** możesz pobrać ten urząd i zainstalować
 w systemie (wtedy kłódka będzie zielona), wygenerować certyfikat na dodatkowe adresy
@@ -72,7 +76,7 @@ albo wgrać własny.
 ustaw w `.env` konkretną wersję:
 
 ```
-MTM_VERSION=0.7.1
+MTM_VERSION=0.7.2
 ```
 
 Aktualne wydania: zakładka *Releases* / tagi `v*` w repozytorium (w `.env` bez litery `v`).
@@ -97,7 +101,7 @@ proces); jej nowy obraz wchodzi przy najbliższym ręcznym `docker compose up -d
 **Ręcznie** (zawsze działa, także bez usługi `updater`):
 
 ```bash
-sed -i 's/^MTM_VERSION=.*/MTM_VERSION=0.7.1/' .env && docker compose pull && docker compose up -d
+sed -i 's/^MTM_VERSION=.*/MTM_VERSION=0.7.2/' .env && docker compose pull && docker compose up -d
 ```
 
 Migracje bazy wykonują się automatycznie przy starcie i działają tylko w przód — powrót do

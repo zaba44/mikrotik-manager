@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.timefmt import dt
 from app.database import get_session
 from app.filenames import ascii_part
 from app.models import Backup, Device
@@ -34,7 +35,7 @@ async def download_backup(backup_id: str, session: AsyncSession = Depends(get_se
 
     device = await session.get(Device, backup.device_id)
     device_name = _safe_filename_part(device.name if device else "urzadzenie")
-    timestamp = backup.created_at.strftime("%Y%m%d-%H%M%S")
+    timestamp = dt(backup.created_at, "%Y%m%d-%H%M%S")  # czas lokalny panelu, jak w tabeli kopii
 
     if backup.backup_type == "wg-snapshot":
         text = decrypt(backup.content_text_encrypted)

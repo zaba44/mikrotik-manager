@@ -69,7 +69,7 @@
         <tbody>
             {% for e in entries %}
             <tr>
-                <td class="empty cell-nowrap">{{ e.received_at.strftime("%m-%d %H:%M:%S") }}</td>
+                <td class="empty cell-nowrap">{{ e.received_at | dt("%m-%d %H:%M:%S") }}</td>
                 <td>{% if e.level == 'critical' %}<span class="pill pill-bad">critical</span>
                     {% elif e.level == 'error' %}<span class="pill pill-bad">error</span>
                     {% elif e.level == 'warning' %}<span class="pill pill-warn">warning</span>

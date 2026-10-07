@@ -73,7 +73,7 @@
             {% if stats.with_info %}<span class="pill pill-warn">{{ stats.with_info }}</span>
             {% else %}0{% endif %}</dd></div>
         <div class="kv"><dt>Najstarszy wpis</dt><dd>
-            {% if stats.oldest %}{{ stats.oldest.strftime("%Y-%m-%d %H:%M") }}
+            {% if stats.oldest %}{{ stats.oldest | dt("%Y-%m-%d %H:%M") }}
             {% else %}<span class="empty">—</span>{% endif %}</dd></div>
     </dl>
     {% if stats.with_info %}

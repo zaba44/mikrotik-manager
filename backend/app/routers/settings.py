@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
-from app import portal_update
+from app import portal_update, timefmt
 from app import version as app_version
 from app.portal_backup import BackupError, export_portal, pending_restore, resume_pending_restore
 from sqlalchemy import select
@@ -648,7 +648,7 @@ async def _render_about(request, session, *, error=None, notice=None, status_cod
          "about": about, "updater": updater, "latest": latest,
          "newer": app_version.is_newer(latest, app_version.VERSION),
          "blockers": await portal_update.blockers(latest, updater),
-         "backups": portal_update.list_pre_update_backups(),
+         "backups": portal_update.list_pre_update_backups(), "tz_choices": timefmt.zone_choices(),
          "error": error, "notice": notice},
         status_code=status_code,
     )
@@ -670,6 +670,19 @@ async def about_check(request: Request, session: AsyncSession = Depends(get_sess
     else:
         notice = f"Masz najnowszą wersję ({app_version.VERSION})."
     return await _render_about(request, session, notice=notice)
+
+
+@router.post("/about/timezone")
+async def about_timezone(request: Request, tz: str = Form(""), session: AsyncSession = Depends(get_session)):
+    """Strefa, w ktorej panel pokazuje daty — dziala od razu, bez restartu i bez zmian w plikach
+    na serwerze (dlatego ustawienie w bazie, a nie zmienna w docker-compose)."""
+    tz = tz.strip()
+    if not timefmt.valid_zone(tz):
+        return await _render_about(request, session, status_code=400,
+                                   error=f"Nieznana strefa czasowa „{tz}” — wybierz z listy, np. Europe/Warsaw.")
+    await set_setting(session, timefmt.SETTING_KEY, tz)
+    timefmt.apply_zone(tz)
+    return await _render_about(request, session, notice=f"Strefa czasowa: {tz}. Daty w panelu są już w tym czasie.")
 
 
 @router.post("/about/update")

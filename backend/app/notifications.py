@@ -21,6 +21,7 @@ import logging
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.timefmt import dt, utcnow
 from app.mailer import send_mail
 from app.models import Device, Notification, NotificationOverride
 from app.settings_store import get_int_setting, get_setting
@@ -57,7 +58,7 @@ def _override_applies(override) -> bool:
     if override is None:
         return False
     if override.mode == "muted" and override.muted_until is not None:
-        return datetime.datetime.now() < override.muted_until
+        return utcnow() < override.muted_until  # muted_until zapisane w UTC (timefmt)
     return True
 
 
@@ -78,7 +79,7 @@ async def resolve_subscription(session, event_key: str, device=None, location_id
             continue
         if override.mode == "muted":
             until = override.muted_until
-            detail = f"do {until:%Y-%m-%d %H:%M}" if until else "bezterminowo"
+            detail = f"do {dt(until)}" if until else "bezterminowo"
             return {"send": False, "source": f"wyciszenie {label} ({detail})"}
         allowed = {k.strip() for k in (override.event_keys or "").split(",") if k.strip()}
         return {

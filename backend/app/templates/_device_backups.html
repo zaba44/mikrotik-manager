@@ -21,7 +21,7 @@
                         {% elif backup.backup_type == "export" %}Export{% else %}Binarny{% endif %}
                         {% if backup.note %}<br><span class="empty">{{ backup.note }}</span>{% endif %}
                     </td>
-                    <td>{{ backup.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+                    <td>{{ backup.created_at | dt("%Y-%m-%d %H:%M:%S") }}</td>
                     <td>{{ (backup.size_bytes / 1024) | round(1) ~ " KB" if backup.size_bytes else "—" }}</td>
                     <td>
                         {% if backup.status == "success" %}<span class="pill pill-ok">OK</span>

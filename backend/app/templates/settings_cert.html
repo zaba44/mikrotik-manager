@@ -30,7 +30,7 @@
         <div class="kv"><dt>Wystawiony na</dt><dd>
             {% for a in info.addresses %}<span class="chip">{{ a }}</span> {% endfor %}
             {% if not info.addresses %}<span class="empty">—</span>{% endif %}</dd></div>
-        <div class="kv"><dt>Ważny do</dt><dd>{{ info.not_after.strftime("%Y-%m-%d") }}</dd></div>
+        <div class="kv"><dt>Ważny do</dt><dd>{{ info.not_after | dt("%Y-%m-%d") }}</dd></div>
         <div class="kv"><dt>Wystawca</dt><dd class="empty" style="font-size:0.8rem;">{{ info.issuer }}</dd></div>
     </dl>
     {% elif info.error %}

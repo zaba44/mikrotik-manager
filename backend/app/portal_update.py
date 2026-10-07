@@ -23,7 +23,7 @@ import time
 import httpx
 from sqlalchemy import func, select, text
 
-from app import version
+from app import timefmt, version
 from app.database import async_session
 from app.models import Device, Location, UpdateRun, User
 from app.settings_store import get_setting, set_setting
@@ -146,7 +146,8 @@ async def updater_status() -> dict | None:
 async def updater_start(target: str) -> tuple[bool, str | None]:
     try:
         async with httpx.AsyncClient(timeout=15.0) as c:
-            r = await c.post(f"{UPDATER_URL}/update", json={"version": target}, headers=_updater_headers())
+            r = await c.post(f"{UPDATER_URL}/update", json={"version": target, "tz": timefmt.LOCAL_TZ_NAME},
+                             headers=_updater_headers())
         if r.status_code == 202:
             return True, None
         return False, (r.json().get("error") if r.headers.get("content-type", "").startswith("application/json")
@@ -210,7 +211,7 @@ def list_pre_update_backups() -> list[dict]:
     for n in names:
         st = os.stat(os.path.join(PRE_UPDATE_DIR, n))
         out.append({"name": n, "size": st.st_size,
-                    "created": datetime.datetime.fromtimestamp(st.st_mtime)})
+                    "created": datetime.datetime.fromtimestamp(st.st_mtime, datetime.timezone.utc)})
     return sorted(out, key=lambda b: b["created"], reverse=True)
 
 

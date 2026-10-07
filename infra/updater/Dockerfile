@@ -2,7 +2,7 @@
 # Oficjalny obraz docker:*-cli zawiera juz `docker compose`; dokladamy tylko Pythona.
 FROM docker:29-cli
 
-RUN apk add --no-cache python3
+RUN apk add --no-cache python3 tzdata
 
 COPY updater.py /updater.py
 

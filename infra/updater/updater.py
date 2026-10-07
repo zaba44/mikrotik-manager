@@ -78,6 +78,19 @@ def _token() -> str:
     raise SystemExit("[updater] brak tokenu od backendu — koncze")
 
 
+_ZONE = re.compile(r"^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$")
+
+
+def apply_zone(name) -> bool:
+    """Strefa czasowa dziennika (portal przekazuje swoja w zleceniu) — tylko istniejaca
+    nazwa z bazy stref, bez sciezek i znakow specjalnych."""
+    if not isinstance(name, str) or not _ZONE.match(name) or not os.path.isfile(f"/usr/share/zoneinfo/{name}"):
+        return False
+    os.environ["TZ"] = name
+    time.tzset()
+    return True
+
+
 def valid_version(value) -> bool:
     return isinstance(value, str) and bool(_RELEASE.match(value))
 
@@ -250,7 +263,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(404, {"error": "not found"})
         try:
             length = int(self.headers.get("Content-Length", 0))
-            target = json.loads(self.rfile.read(length) or b"{}").get("version")
+            body = json.loads(self.rfile.read(length) or b"{}")
+            target = body.get("version")
+            apply_zone(body.get("tz"))
         except (ValueError, AttributeError):
             return self._send(400, {"error": "zle zadanie"})
         if not valid_version(target):

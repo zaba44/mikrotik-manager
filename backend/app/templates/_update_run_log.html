@@ -7,7 +7,7 @@
         {% else %}<strong>Ostatnia aktualizacja: błąd</strong>
         {% endif %}
         <span class="pill {% if run.status == 'running' %}pill-warn{% elif run.status == 'succeeded' %}pill-ok{% else %}pill-bad{% endif %}">{% if run.status == 'running' %}<span class="dot"></span>{% endif %}{{ run.status }}</span>
-        <span class="empty">rozpoczęto {{ run.started_at.strftime("%Y-%m-%d %H:%M:%S") }}</span>
+        <span class="empty">rozpoczęto {{ run.started_at | dt("%Y-%m-%d %H:%M:%S") }}</span>
     </div>
     {% if run.error_message %}<p class="error">{{ run.error_message }}</p>{% endif %}
     {% if run.steps %}
@@ -27,8 +27,8 @@
                         {% elif step.status == "skipped" %}<span class="pill pill-idle">pominięto</span>
                         {% else %}<span class="pill pill-bad">błąd</span>{% endif %}
                     </td>
-                    <td>{{ step.started_at.strftime("%H:%M:%S") }}</td>
-                    <td>{{ step.finished_at.strftime("%H:%M:%S") if step.finished_at else "—" }}</td>
+                    <td>{{ step.started_at | dt("%H:%M:%S") }}</td>
+                    <td>{{ step.finished_at | dt("%H:%M:%S", "—") }}</td>
                     <td style="white-space:normal;">{{ step.detail or "—" }}</td>
                 </tr>
                 {% endfor %}

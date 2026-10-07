@@ -48,12 +48,12 @@ na tym MikroTiku — to jedyny krok, który nadal wymaga ręcznej roboty.</p>
     </summary>
     {% if device.last_polled_at %}
     <dl class="kv-grid">
-        <div class="kv"><dt>Ostatni handshake WG</dt><dd>{{ device.last_handshake_at.strftime("%Y-%m-%d %H:%M:%S") if device.last_handshake_at else "nigdy" }}</dd></div>
+        <div class="kv"><dt>Ostatni handshake WG</dt><dd>{{ device.last_handshake_at | dt("%Y-%m-%d %H:%M:%S", "nigdy") }}</dd></div>
         <div class="kv"><dt>REST API</dt><dd>{{ "osiągalne" if device.api_reachable else "nieosiągalne" }}</dd></div>
         <div class="kv"><dt>Wersja RouterOS</dt><dd>{{ device.routeros_version or "—" }}</dd></div>
         <div class="kv"><dt>Uptime</dt><dd>{{ device.routeros_uptime or "—" }}</dd></div>
         <div class="kv"><dt>Port Winbox</dt><dd>{% if device.routeros_winbox_port %}<span class="chip">{{ device.routeros_winbox_port }}</span>{% else %}—{% endif %}</dd></div>
-        <div class="kv"><dt>Ostatnie sprawdzenie</dt><dd>{{ device.last_polled_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd></div>
+        <div class="kv"><dt>Ostatnie sprawdzenie</dt><dd>{{ device.last_polled_at | dt("%Y-%m-%d %H:%M:%S") }}</dd></div>
     </dl>
     {% else %}
     <div class="empty-state">Jeszcze nie sprawdzone — scheduler odpytuje urządzenia okresowo w tle.</div>

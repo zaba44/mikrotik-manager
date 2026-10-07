@@ -115,3 +115,14 @@ def test_wrong_image_after_up_is_failure(up, monkeypatch):
     docker = _Docker(up, image_tag="0.6.8")  # kontenery wstaly, ale na starym obrazie
     state = _go(up, docker, monkeypatch)
     assert state["state"] == "failed" and "nowej wersji" in state["error"]
+
+
+@pytest.mark.parametrize("name,ok", [
+    ("Europe/Warsaw", True), ("../../etc/passwd", False), ("Europe/Narnia", False), (None, False), (5, False),
+])
+def test_updater_zone_only_real_names(up, monkeypatch, name, ok):
+    monkeypatch.setattr(up.os.path, "isfile", lambda p: p == "/usr/share/zoneinfo/Europe/Warsaw")
+    monkeypatch.setattr(up.time, "tzset", lambda: None)
+    monkeypatch.setenv("TZ", "UTC")
+    assert up.apply_zone(name) is ok
+    assert os.environ["TZ"] == ("Europe/Warsaw" if ok else "UTC")

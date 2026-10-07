@@ -31,7 +31,7 @@
         <div class="kv"><dt>Commit</dt><dd>{% if p.commit %}<a href="{{ p.project_url }}/commit/{{ p.commit_full }}" target="_blank" rel="noopener"><code>{{ p.commit }}</code></a>{% else %}—{% endif %}</dd></div>
         <div class="kv"><dt>Zbudowano</dt><dd>{{ p.build_date or "—" }}</dd></div>
         <div class="kv"><dt>Najnowsze wydanie</dt><dd>{{ latest or "—" }}{% if newer %} &nbsp;<a href="{{ p.project_url }}/compare/v{{ p.version }}...v{{ latest }}" target="_blank" rel="noopener">co się zmieniło</a>{% endif %}</dd></div>
-        <div class="kv"><dt>Ostatnie sprawdzenie</dt><dd>{{ (about.check.checked_at[:16] | replace("T", " ")) ~ " UTC" if about.check.checked_at else "jeszcze nie sprawdzano" }}</dd></div>
+        <div class="kv"><dt>Ostatnie sprawdzenie</dt><dd>{{ about.check.checked_at | dt("%Y-%m-%d %H:%M", "jeszcze nie sprawdzano") }}</dd></div>
         <div class="kv"><dt>Usługa aktualizacji</dt><dd>{% if updater %}działa ({{ updater.version }}){% else %}brak — aktualizacja ręczna{% endif %}</dd></div>
     </dl>
     {% if about.check.error %}<p class="hint">Ostatnie sprawdzenie nie powiodło się: {{ about.check.error }}</p>{% endif %}
@@ -108,8 +108,9 @@
         <div class="kv"><dt>PostgreSQL</dt><dd>{{ about.db.server or "—" }}{% if about.db.size %} · baza {{ about.db.size }}{% endif %}</dd></div>
         <div class="kv"><dt>Migracja bazy</dt><dd><code>{{ about.db.revision or "?" }}</code>{% if about.db.head and about.db.revision != about.db.head %} — <span class="up">oczekiwana {{ about.db.head }}</span>{% endif %}</dd></div>
         <div class="kv"><dt>Agent WireGuard</dt><dd>{% if about.hub.agent %}{{ about.hub.agent.version or "starszy (bez numeru)" }} · interfejs {{ "działa" if about.hub.agent.up else "nie działa" }}{% else %}nie odpowiada{% endif %}</dd></div>
-        <div class="kv"><dt>Backend działa od</dt><dd>{{ p.started_at.strftime("%Y-%m-%d %H:%M") }} UTC ({{ p.uptime.days }} d {{ (p.uptime.seconds // 3600) }} h)</dd></div>
-        <div class="kv"><dt>Czas serwera</dt><dd>{{ about.server_time.strftime("%Y-%m-%d %H:%M:%S") }} UTC</dd></div>
+        <div class="kv"><dt>Backend działa od</dt><dd>{{ p.started_at | dt("%Y-%m-%d %H:%M") }} ({{ p.uptime.days }} d {{ (p.uptime.seconds // 3600) }} h)</dd></div>
+        <div class="kv"><dt>Czas serwera</dt><dd>{{ about.server_time | dt("%Y-%m-%d %H:%M:%S") }}</dd></div>
+        <div class="kv"><dt>Strefa czasowa</dt><dd>{{ local_tz() }}</dd></div>
     </dl>
     {% if updater and updater.containers %}
     <table style="margin-top:0.8rem;">
@@ -117,6 +118,12 @@
         <tbody>{% for c in updater.containers %}<tr><td>{{ c.service }}</td><td><code>{{ c.image }}</code></td><td>{{ c.status or c.state }}</td></tr>{% endfor %}</tbody>
     </table>
     {% endif %}
+    <form method="post" action="/settings/about/timezone" class="form-inline" style="margin-top:0.8rem;">
+        <label for="tz" class="hint" style="margin:0;">Strefa czasowa panelu (baza i tak w UTC):</label>
+        <input id="tz" name="tz" list="tz-list" value="{{ local_tz() }}" style="width:auto; min-width:14rem;">
+        <datalist id="tz-list">{% for z in tz_choices %}<option value="{{ z }}">{% endfor %}</datalist>
+        <button type="submit" class="button-ghost">Zapisz</button>
+    </form>
     <details style="margin-top:0.8rem;">
         <summary>Biblioteki Pythona</summary>
         <table>{% for name, v in p.packages %}<tr><td>{{ name }}</td><td>{{ v }}</td></tr>{% endfor %}</table>

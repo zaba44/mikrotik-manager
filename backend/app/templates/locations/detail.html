@@ -52,7 +52,7 @@
                     <td><span class="chip">{{ device.wg_ip }}</span></td>
                     <td data-sort-value="{{ status_weight }}">{% include "_status_badge.html" %}</td>
                     <td>{{ device.routeros_uptime or "—" }}</td>
-                    <td>{{ device.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+                    <td>{{ device.created_at | dt("%Y-%m-%d %H:%M") }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

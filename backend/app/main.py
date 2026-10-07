@@ -18,7 +18,7 @@ from app.models import Location, User
 from app.routers import auth, backups, dashboard, devices, locations, routerwg, routerwg_write, setup, settings as settings_router
 from app.scheduler import start_scheduler
 from app.syslog_receiver import start_receiver, stop_receiver
-from app import portal_update
+from app import portal_update, timefmt
 from app.portal_backup import pending_restore, resume_pending_restore
 from app.update_orchestrator import cleanup_stale_runs
 from app.wg_bringup import ensure_wg_up
@@ -59,6 +59,7 @@ async def lifespan(app: FastAPI):
     async with async_session() as s:
         if not await users_exist(s):
             setup_token.ensure()
+    await timefmt.load_zone()  # strefa panelu z ustawien — zanim cokolwiek zapisze czas lokalny
     await load_wg_config()
     # Niedokonczone odtwarzanie kopii PRZED zwyklym podniesieniem tunelu: zwykle
     # ensure_wg_up() na swiezej instalacji kazaloby agentowi wygenerowac NOWY klucz huba,
