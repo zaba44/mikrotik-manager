@@ -1363,3 +1363,8 @@ details.sec[open] > summary .sec-addr { opacity: 1; }
 .kv dd { overflow-wrap: anywhere; min-width: 0; }
 .kv dd code { white-space: normal; word-break: break-all; }
 .endpoint-picks { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.35rem 0 0; }
+
+/* Wersja portalu w stopce panelu bocznego */
+.portal-version { display: block; margin: 0.4rem 0 0.2rem; font-size: 0.72rem; color: var(--text-faint); text-decoration: none; letter-spacing: 0.02em; }
+.portal-version:hover { color: var(--text); }
+.portal-version-new { color: var(--warn); font-weight: 600; }

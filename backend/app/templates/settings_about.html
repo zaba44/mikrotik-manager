@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}O portalu — Ustawienia{% endblock %}
+{% block content %}
+{% set active_tab = 'about' %}
+{% set p = about.portal %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Panel administracyjny</span>
+        <h1 class="page-title">Ustawienia</h1>
+    </div>
+</div>
+
+{% include "_settings_tabs.html" %}
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+
+<section class="panel glow-card" style="max-width: 820px;" id="aktualizacja">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+            Wersja i aktualizacja
+        </h2>
+        {% if p.version == 'dev' %}<span class="pill pill-idle">wersja deweloperska</span>
+        {% elif newer %}<span class="pill pill-warn"><span class="dot"></span>dostępna {{ latest }}</span>
+        {% elif latest %}<span class="pill pill-ok"><span class="dot"></span>aktualna</span>{% endif %}
+    </div>
+
+    <dl class="kv-grid">
+        <div class="kv"><dt>Wersja portalu</dt><dd><b>{{ p.version }}</b></dd></div>
+        <div class="kv"><dt>Commit</dt><dd>{% if p.commit %}<a href="{{ p.project_url }}/commit/{{ p.commit_full }}" target="_blank" rel="noopener"><code>{{ p.commit }}</code></a>{% else %}—{% endif %}</dd></div>
+        <div class="kv"><dt>Zbudowano</dt><dd>{{ p.build_date or "—" }}</dd></div>
+        <div class="kv"><dt>Najnowsze wydanie</dt><dd>{{ latest or "—" }}{% if newer %} &nbsp;<a href="{{ p.project_url }}/compare/v{{ p.version }}...v{{ latest }}" target="_blank" rel="noopener">co się zmieniło</a>{% endif %}</dd></div>
+        <div class="kv"><dt>Ostatnie sprawdzenie</dt><dd>{{ (about.check.checked_at[:16] | replace("T", " ")) ~ " UTC" if about.check.checked_at else "jeszcze nie sprawdzano" }}</dd></div>
+        <div class="kv"><dt>Usługa aktualizacji</dt><dd>{% if updater %}działa ({{ updater.version }}){% else %}brak — aktualizacja ręczna{% endif %}</dd></div>
+    </dl>
+    {% if about.check.error %}<p class="hint">Ostatnie sprawdzenie nie powiodło się: {{ about.check.error }}</p>{% endif %}
+
+    <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.8rem;">
+        <form method="post" action="/settings/about/check" class="bare">
+            <button type="submit" class="button-ghost">Sprawdź aktualizacje</button>
+        </form>
+        {% if newer %}
+        <form method="post" action="/settings/about/update" class="bare"
+              data-confirm="Zaktualizować portal z {{ p.version }} do {{ latest }}? Najpierw powstanie kopia portalu. Panel i tunel floty będą niedostępne przez kilkanaście sekund.">
+            <input type="hidden" name="version" value="{{ latest }}">
+            <button type="submit" {% if blockers %}disabled title="{{ blockers | join(' ') }}"{% endif %}>Aktualizuj do {{ latest }}</button>
+        </form>
+        {% endif %}
+    </div>
+    {% if newer and blockers %}
+    <ul class="hint" style="margin-top:0.6rem;">{% for b in blockers %}<li>{{ b }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if newer and not updater %}
+    <p class="hint" style="margin-top:0.6rem;">Ręcznie, na serwerze, w katalogu stacka:</p>
+    <pre>sudo sed -i 's/^MTM_VERSION=.*/MTM_VERSION={{ latest }}/' .env && sudo docker compose pull && sudo docker compose up -d</pre>
+    {% endif %}
+
+    <div id="update-progress" {% if not updater or updater.state not in ('running', 'done', 'failed') %}hidden{% endif %}
+         data-state="{{ updater.state if updater else '' }}" data-target="{{ updater.target if updater else '' }}"
+         data-current="{{ p.version }}" style="margin-top:1rem;">
+        <p><b id="update-headline">
+            {% if updater and updater.state == 'running' %}Aktualizacja do {{ updater.target }} trwa…
+            {% elif updater and updater.state == 'done' %}Ostatnia aktualizacja: {{ updater.from or '?' }} → {{ updater.target }}, zakończona.
+            {% elif updater and updater.state == 'failed' %}Ostatnia aktualizacja do {{ updater.target }} nie powiodła się: {{ updater.error }}
+            {% endif %}</b></p>
+        <pre id="update-log" style="max-height:18rem; overflow:auto;">{% if updater %}{{ (updater.log or []) | join('\n') }}{% endif %}</pre>
+    </div>
+
+    {% if backups %}
+    <p class="hint" style="margin-top:1rem;">Kopie portalu sprzed aktualizacji (ostatnie {{ backups | length }}) — zawierają klucze całej instalacji:</p>
+    <ul class="hint">{% for b in backups %}
+        <li><a href="/settings/about/backups/{{ b.name }}">{{ b.name }}</a> ({{ (b.size / 1024) | round(1) }} KB)</li>
+    {% endfor %}</ul>
+    {% endif %}
+</section>
+
+<section class="panel glow-card" style="max-width: 820px;">
+    <div class="panel-head"><h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        Flota — wersje RouterOS
+    </h2></div>
+    <dl class="kv-grid">
+        <div class="kv"><dt>Urządzenia</dt><dd>{{ about.fleet.total }} (osiągalne przez API: {{ about.fleet.reachable }})</dd></div>
+        <div class="kv"><dt>Wymagane minimum</dt><dd>RouterOS {{ about.fleet.min }}</dd></div>
+    </dl>
+    {% if about.fleet.versions %}
+    <table>
+        <thead><tr><th>Wersja RouterOS</th><th>Urządzeń</th></tr></thead>
+        <tbody>{% for v, n in about.fleet.versions %}<tr><td>{{ v }}</td><td>{{ n }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% endif %}
+    {% if about.fleet.too_old %}
+    <p class="error" style="margin-top:0.8rem;">Poniżej wymaganej wersji {{ about.fleet.min }}: {{ about.fleet.too_old | join(", ") }} — część funkcji (m.in. nazwane peery WireGuard) nie zadziała.</p>
+    {% endif %}
+    {% if about.fleet.unknown %}
+    <p class="hint">Wersja jeszcze nieznana (portal nie odpytał urządzenia): {{ about.fleet.unknown | join(", ") }}</p>
+    {% endif %}
+</section>
+
+<section class="panel glow-card" style="max-width: 820px;">
+    <div class="panel-head"><h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+        Składniki
+    </h2></div>
+    <dl class="kv-grid">
+        <div class="kv"><dt>Python</dt><dd>{{ p.python }}</dd></div>
+        <div class="kv"><dt>PostgreSQL</dt><dd>{{ about.db.server or "—" }}{% if about.db.size %} · baza {{ about.db.size }}{% endif %}</dd></div>
+        <div class="kv"><dt>Migracja bazy</dt><dd><code>{{ about.db.revision or "?" }}</code>{% if about.db.head and about.db.revision != about.db.head %} — <span class="up">oczekiwana {{ about.db.head }}</span>{% endif %}</dd></div>
+        <div class="kv"><dt>Agent WireGuard</dt><dd>{% if about.hub.agent %}{{ about.hub.agent.version or "starszy (bez numeru)" }} · interfejs {{ "działa" if about.hub.agent.up else "nie działa" }}{% else %}nie odpowiada{% endif %}</dd></div>
+        <div class="kv"><dt>Backend działa od</dt><dd>{{ p.started_at.strftime("%Y-%m-%d %H:%M") }} UTC ({{ p.uptime.days }} d {{ (p.uptime.seconds // 3600) }} h)</dd></div>
+        <div class="kv"><dt>Czas serwera</dt><dd>{{ about.server_time.strftime("%Y-%m-%d %H:%M:%S") }} UTC</dd></div>
+    </dl>
+    {% if updater and updater.containers %}
+    <table style="margin-top:0.8rem;">
+        <thead><tr><th>Usługa</th><th>Obraz</th><th>Stan</th></tr></thead>
+        <tbody>{% for c in updater.containers %}<tr><td>{{ c.service }}</td><td><code>{{ c.image }}</code></td><td>{{ c.status or c.state }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% endif %}
+    <details style="margin-top:0.8rem;">
+        <summary>Biblioteki Pythona</summary>
+        <table>{% for name, v in p.packages %}<tr><td>{{ name }}</td><td>{{ v }}</td></tr>{% endfor %}</table>
+    </details>
+</section>
+
+<section class="panel glow-card" style="max-width: 820px;">
+    <div class="panel-head"><h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+        Hub i instalacja
+    </h2></div>
+    <dl class="kv-grid">
+        <div class="kv"><dt>Adres huba</dt><dd>{{ about.hub.endpoint or "—" }}:{{ about.hub.port }}/udp</dd></div>
+        <div class="kv"><dt>Podsieć tunelu</dt><dd>{{ about.hub.subnet or "—" }} (hub {{ about.hub.server_ip or "—" }})</dd></div>
+        <div class="kv"><dt>Peery na hubie</dt><dd>{{ about.hub.peers }} (zapisanych w konfiguracji: {{ about.hub.peers_saved }})</dd></div>
+        <div class="kv"><dt>Klucz publiczny huba</dt><dd><code>{{ about.hub.public_key or "—" }}</code></dd></div>
+        <div class="kv"><dt>Użytkownicy</dt><dd>{{ about.counts.users }} (administratorów: {{ about.counts.admins }})</dd></div>
+        <div class="kv"><dt>Lokalizacje</dt><dd>{{ about.counts.locations }}</dd></div>
+    </dl>
+    <p class="hint" style="margin-top:0.8rem;">Kod i lista zmian: <a href="{{ p.project_url }}" target="_blank" rel="noopener">{{ p.project_url }}</a></p>
+</section>
+
+<script src="/static/update.js?v={{ asset_v }}" defer></script>
+{% endblock %}

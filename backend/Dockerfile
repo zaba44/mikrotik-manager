@@ -18,6 +18,12 @@ COPY alembic.ini .
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 
+# Wersja wbudowana przy budowaniu (release.yml); obraz zbudowany recznie ma `dev`.
+ARG MTM_BUILD_VERSION=dev
+ARG MTM_BUILD_COMMIT=
+ARG MTM_BUILD_DATE=
+ENV MTM_BUILD_VERSION=$MTM_BUILD_VERSION MTM_BUILD_COMMIT=$MTM_BUILD_COMMIT MTM_BUILD_DATE=$MTM_BUILD_DATE
+
 EXPOSE 8000
 
 ENTRYPOINT ["./entrypoint.sh"]

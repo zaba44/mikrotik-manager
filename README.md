@@ -72,20 +72,42 @@ albo wgrać własny.
 ustaw w `.env` konkretną wersję:
 
 ```
-MTM_VERSION=0.6.8
+MTM_VERSION=0.7.0
 ```
 
 Aktualne wydania: zakładka *Releases* / tagi `v*` w repozytorium (w `.env` bez litery `v`).
 
 ## Aktualizacja
 
+**Z panelu:** Ustawienia → **O portalu** → „Sprawdź aktualizacje”, a gdy jest nowsze wydanie
+— „Aktualizuj do X.Y.Z”. Portal sam robi wtedy kopię całości (do pobrania w tej samej
+zakładce), przestawia `MTM_VERSION` w `.env`, pobiera obrazy i odtwarza kontenery backendu
+i agenta WireGuard. Panel i tunel floty znikają na kilkanaście sekund, a strona sama pokazuje
+postęp i wraca z nową wersją. Portal raz na dobę sam sprawdza, czy jest nowsze wydanie
+(znaczek w panelu bocznym), ale **nigdy nie aktualizuje się bez kliknięcia**.
+
+Aktualizację wykonuje osobna usługa `updater` — jedyny kontener z dostępem do Dockera.
+Gniazdo Dockera to w praktyce root na hoście, dlatego dostaje je tylko ta mała usługa, która
+umie wyłącznie przestawić ten jeden stack na podany numer wydania. Aplikacja webowa
+(z kluczami do całej floty) tego dostępu nie ma. Jeśli nie chcesz, żeby jakikolwiek kontener
+miał dostęp do Dockera, usuń blok `updater` z `docker-compose.yml` — zakładka pokaże wtedy
+polecenie do wykonania ręcznie. Sama usługa nie aktualizuje się w trakcie (zabiłaby własny
+proces); jej nowy obraz wchodzi przy najbliższym ręcznym `docker compose up -d`.
+
+**Ręcznie** (zawsze działa, także bez usługi `updater`):
+
 ```bash
-docker compose pull && docker compose up -d
+sed -i 's/^MTM_VERSION=.*/MTM_VERSION=0.7.0/' .env && docker compose pull && docker compose up -d
 ```
 
-Migracje bazy wykonują się automatycznie przy starcie. **Zrób wcześniej kopię portalu**
-(Ustawienia → Kopie zapasowe → Pobierz kopię portalu) — to jeden plik, z którego
-odtworzysz całość.
+Migracje bazy wykonują się automatycznie przy starcie i działają tylko w przód — powrót do
+starszej wersji to odtworzenie kopii sprzed aktualizacji. Przy aktualizacji ręcznej **zrób
+wcześniej kopię portalu** (Ustawienia → Kopie zapasowe → Pobierz kopię portalu).
+
+**Instalacje sprzed 0.7.0** nie mają jeszcze usługi `updater`: jednorazowo pobierz nowy
+`docker-compose.yml` (polecenie `curl` z sekcji Uruchomienie), ustaw `MTM_VERSION=0.7.0`
+i zrób `docker compose pull && docker compose up -d`. Kolejne wersje zaktualizujesz już
+z panelu.
 
 ## Kopia zapasowa i odtwarzanie
 

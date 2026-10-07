@@ -59,6 +59,15 @@ if [ ! -f /data/agent/token ]; then
 fi
 export WG_AGENT_TOKEN="$(cat /data/agent/token)"
 
+# Token do uslugi aktualizacji (updater) — ten sam wzorzec co token agenta. Katalog istnieje
+# zawsze (takze bez uslugi updater — wtedy portal po prostu jej nie znajdzie).
+mkdir -p /data/updater
+if [ ! -f /data/updater/token ]; then
+    python3 -c "import secrets; open('/data/updater/token','w').write(secrets.token_hex(32))"
+    chmod 600 /data/updater/token
+    echo "Generated new updater token"
+fi
+
 # Certyfikat HTTPS panelu. Świeża instalacja MUSI mieć czym wstać — Caddy startuje po
 # nas (depends_on) i bez plików certyfikatu nie podniósłby się w ogóle, czyli nie byłoby
 # nawet kreatora. Własne mini-CA + certyfikat serwera; user może potem podmienić z GUI.

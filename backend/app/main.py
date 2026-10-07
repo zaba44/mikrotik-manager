@@ -18,6 +18,7 @@ from app.models import Location, User
 from app.routers import auth, backups, dashboard, devices, locations, routerwg, routerwg_write, setup, settings as settings_router
 from app.scheduler import start_scheduler
 from app.syslog_receiver import start_receiver, stop_receiver
+from app import portal_update
 from app.portal_backup import pending_restore, resume_pending_restore
 from app.update_orchestrator import cleanup_stale_runs
 from app.wg_bringup import ensure_wg_up
@@ -66,6 +67,7 @@ async def lifespan(app: FastAPI):
     if pending_restore() is None:
         await ensure_wg_up()
     await cleanup_stale_runs()
+    await portal_update.load_cached()  # znaczek „dostępna nowa” od pierwszej strony
     scheduler = start_scheduler()
     app.state.scheduler = scheduler
     sftp_server = await start_backup_sftp_server()

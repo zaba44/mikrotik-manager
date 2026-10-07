@@ -1,9 +1,12 @@
 import datetime
+import os
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
+from app import portal_update
+from app import version as app_version
 from app.portal_backup import BackupError, export_portal, pending_restore, resume_pending_restore
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -631,3 +634,83 @@ async def delete_user_route(request: Request, user_id: str, session: AsyncSessio
     await session.delete(target)
     await session.commit()
     return RedirectResponse(url="/settings/users", status_code=303)
+
+
+# ---- Zakładka: O portalu (wersje, aktualizacja) ----
+
+async def _render_about(request, session, *, error=None, notice=None, status_code=200):
+    about = await portal_update.collect_about()
+    updater = await portal_update.updater_status()
+    latest = about["check"]["latest"]
+    return templates.TemplateResponse(
+        "settings_about.html",
+        {"request": request, "nav_locations": await list_locations(session), "active_tab": "about",
+         "about": about, "updater": updater, "latest": latest,
+         "newer": app_version.is_newer(latest, app_version.VERSION),
+         "blockers": await portal_update.blockers(latest, updater),
+         "backups": portal_update.list_pre_update_backups(),
+         "error": error, "notice": notice},
+        status_code=status_code,
+    )
+
+
+@router.get("/about")
+async def about_page(request: Request, session: AsyncSession = Depends(get_session)):
+    return await _render_about(request, session)
+
+
+@router.post("/about/check")
+async def about_check(request: Request, session: AsyncSession = Depends(get_session)):
+    result = await portal_update.check()
+    if result["error"]:
+        return await _render_about(request, session, status_code=502,
+                                   error=f"Nie udało się sprawdzić aktualizacji: {result['error']}")
+    if app_version.is_newer(result["latest"], app_version.VERSION):
+        notice = f"Dostępna jest nowa wersja: {result['latest']}."
+    else:
+        notice = f"Masz najnowszą wersję ({app_version.VERSION})."
+    return await _render_about(request, session, notice=notice)
+
+
+@router.post("/about/update")
+async def about_update(request: Request, version: str = Form(""), session: AsyncSession = Depends(get_session)):
+    """Aktualizacja do wersji z OSTATNIEGO SPRAWDZENIA — formularz nie moze podsunac
+    dowolnego numeru. Kolejnosc: warunki -> kopia portalu -> zlecenie uslugi aktualizacji."""
+    latest = (await portal_update.collect_about())["check"]["latest"]
+    if version != latest:
+        return await _render_about(request, session, status_code=409,
+                                   error="Wersja nie zgadza się z ostatnim sprawdzeniem — sprawdź aktualizacje ponownie.")
+    updater = await portal_update.updater_status()
+    problems = await portal_update.blockers(latest, updater)
+    if problems:
+        return await _render_about(request, session, status_code=409, error=" ".join(problems))
+    try:
+        await portal_update.pre_update_backup(latest)
+    except Exception as e:  # bez kopii nie aktualizujemy — migracje bazy dzialaja tylko w przod
+        return await _render_about(request, session, status_code=503,
+                                   error=f"Kopia portalu przed aktualizacją nie powstała ({e}) — aktualizacja NIE ruszyła.")
+    ok, err = await portal_update.updater_start(latest)
+    if not ok:
+        return await _render_about(request, session, status_code=502,
+                                   error=f"Usługa aktualizacji odmówiła: {err}. Kopia portalu powstała, nic więcej nie zmieniono.")
+    return RedirectResponse(url="/settings/about#aktualizacja", status_code=303)
+
+
+@router.get("/about/status")
+async def about_status():
+    """Do podgladu na zywo. W trakcie aktualizacji backend znika na kilkanascie sekund —
+    strona ponawia zapytania i rozpoznaje nowa wersje po `portal_version`."""
+    updater = await portal_update.updater_status()
+    return JSONResponse({
+        "portal_version": app_version.VERSION,
+        "updater": None if updater is None else {k: updater.get(k) for k in
+                                                  ("state", "target", "from", "error", "log", "started_at", "finished_at")},
+    })
+
+
+@router.get("/about/backups/{name}")
+async def about_backup_download(name: str):
+    if name not in {b["name"] for b in portal_update.list_pre_update_backups()}:
+        raise HTTPException(status_code=404, detail="Nie ma takiej kopii")
+    return FileResponse(os.path.join(portal_update.PRE_UPDATE_DIR, name), media_type="application/gzip",
+                        filename=name)

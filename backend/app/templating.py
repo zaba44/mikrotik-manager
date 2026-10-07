@@ -69,3 +69,11 @@ def _asset_version() -> str:
 
 
 templates.env.globals["asset_v"] = _asset_version()
+
+# Wersja portalu w panelu bocznym i znaczek „dostępna nowa" (wynik ostatniego sprawdzenia
+# trzymany w pamieci — bez zapytania do bazy przy kazdej stronie).
+from app import portal_update as _portal_update  # noqa: E402
+from app import version as _version  # noqa: E402
+
+templates.env.globals["portal_version"] = _version.VERSION
+templates.env.globals["portal_update_available"] = _portal_update.update_available

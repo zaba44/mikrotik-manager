@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.backup_service import run_all_backups
 from app import local_address
+from app import portal_update
 from app.routerwg import snapshot as wg_snapshot
 from app.config import settings
 from app.database import async_session
@@ -231,6 +232,15 @@ def start_scheduler() -> AsyncIOScheduler:
     )
     # Odtwarzanie kopii, ktorego tunel albo peery nie weszly (agent niedostepny itp.),
     # ponawiane az do skutku. Bez dziennika na dysku job konczy sie na jednym os.path.exists.
+    # Raz na dobe: czy jest nowsze wydanie portalu. TYLKO informacja (znaczek w panelu,
+    # zakladka O portalu) — aktualizacje uruchamia czlowiek przyciskiem.
+    scheduler.add_job(
+        portal_update.check_quietly,
+        "interval",
+        hours=24,
+        next_run_time=datetime.datetime.now() + datetime.timedelta(minutes=2),
+        id="portal_update_check",
+    )
     scheduler.add_job(
         resume_pending_restore,
         "interval",

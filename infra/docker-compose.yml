@@ -43,6 +43,9 @@ services:
       - BACKUP_SFTP_PORT=${BACKUP_SFTP_PORT:-2222}
       - SYSLOG_PORT=${SYSLOG_PORT:-5514}
       - BACKUP_UPLOAD_TIMEOUT_SECONDS=${BACKUP_UPLOAD_TIMEOUT_SECONDS:-120}
+      # Skad sprawdzac nowe wydania (te same obrazy, ktore pobiera compose).
+      - MTM_IMAGE=${MTM_IMAGE:-ghcr.io/zaba44/mikrotik-manager}
+      - MTM_REGISTRY_API=${MTM_REGISTRY_API:-}
     depends_on:
       - postgres
       - wireguard
@@ -51,6 +54,7 @@ services:
       - secret_data:/data/secrets
       - tls_data:/data/tls
       - agent_secret:/data/agent
+      - updater_secret:/data/updater
     networks:
       - internal
     restart: unless-stopped
@@ -98,3 +102,4 @@ volumes:
   caddy_data:
   backup_data:
   secret_data:
+  updater_secret:

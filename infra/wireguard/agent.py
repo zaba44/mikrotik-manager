@@ -332,6 +332,7 @@ class Handler(BaseHTTPRequestHandler):
                     "up": interface_up(),
                     "public_key": public_key(),
                     "listen_port": WG_PORT,
+                    "version": os.environ.get("MTM_BUILD_VERSION") or "dev",
                 })
             if self.path == "/privatekey":
                 if not os.path.exists(KEY_FILE):

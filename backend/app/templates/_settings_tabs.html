@@ -6,4 +6,5 @@
     <a href="/settings/notifications" class="tab{% if active_tab == 'notify' %} active{% endif %}">Powiadomienia</a>
     <a href="/settings/admin-peers" class="tab{% if active_tab == 'admin' %} active{% endif %}">Peery administracyjne</a>
     <a href="/settings/users" class="tab{% if active_tab == 'users' %} active{% endif %}">Użytkownicy</a>
+    <a href="/settings/about" class="tab{% if active_tab == 'about' %} active{% endif %}">O portalu{% if portal_update_available() %} <span class="pill pill-warn" style="padding:0 0.4rem;">nowa</span>{% endif %}</a>
 </div>

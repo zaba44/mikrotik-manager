@@ -1,0 +1,7 @@
+# Skrypty i pliki budowania obrazow zawsze z LF — takze w kopii roboczej na Windowsie.
+# Z CRLF `exec ./entrypoint.sh` w kontenerze konczy sie „no such file or directory".
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+Caddyfile text eol=lf

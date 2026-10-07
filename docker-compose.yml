@@ -2,7 +2,7 @@
 # Pobierasz ten plik + Caddyfile + .env, uruchamiasz `docker compose up -d`
 # i przechodzisz kreator w przegladarce. Do pracy nad kodem sluzy infra/docker-compose.yml.
 #
-# MTM_VERSION przypnij do konkretnej wersji (np. 0.6.8) — `latest` moze sie zmienic
+# MTM_VERSION przypnij do konkretnej wersji (np. 0.7.0) — `latest` moze sie zmienic
 # w srodku tygodnia i zaskoczyc migracja bazy.
 services:
   wireguard:
@@ -49,6 +49,9 @@ services:
       - BACKUP_SFTP_PORT=${BACKUP_SFTP_PORT:-2222}
       - SYSLOG_PORT=${SYSLOG_PORT:-5514}
       - BACKUP_UPLOAD_TIMEOUT_SECONDS=${BACKUP_UPLOAD_TIMEOUT_SECONDS:-120}
+      # Skad sprawdzac nowe wydania (te same obrazy, ktore pobiera compose).
+      - MTM_IMAGE=${MTM_IMAGE:-ghcr.io/zaba44/mikrotik-manager}
+      - MTM_REGISTRY_API=${MTM_REGISTRY_API:-}
     depends_on:
       - postgres
       - wireguard
@@ -57,6 +60,7 @@ services:
       - secret_data:/data/secrets
       - tls_data:/data/tls
       - agent_secret:/data/agent
+      - updater_secret:/data/updater
     networks:
       - internal
     restart: unless-stopped
@@ -92,6 +96,22 @@ services:
       - internal
     restart: unless-stopped
 
+  # Aktualizacja portalu z panelu (Ustawienia -> O portalu). JEDYNA usluga z dostepem
+  # do Dockera — umie wylacznie przestawic TEN stack na podana wersje. Gniazdo Dockera to
+  # w praktyce root na hoscie: jesli wolisz aktualizowac recznie, usun ten blok, a portal
+  # pokaze polecenie do wykonania na serwerze. Katalog stacka (.) jest potrzebny, bo
+  # aktualizacja zmienia MTM_VERSION w .env i uruchamia compose dla tego projektu.
+  updater:
+    image: ${MTM_IMAGE:-ghcr.io/zaba44/mikrotik-manager}-updater:${MTM_VERSION:-latest}
+    container_name: mtm-updater
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/stack
+      - updater_secret:/data/updater
+    networks:
+      - internal
+    restart: unless-stopped
+
 networks:
   internal:
     driver: bridge
@@ -104,3 +124,4 @@ volumes:
   caddy_data:
   backup_data:
   secret_data:
+  updater_secret:
