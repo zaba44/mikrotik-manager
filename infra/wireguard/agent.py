@@ -96,9 +96,28 @@ def _iptables_replace(table: str, chain: str, match: list[str], rule: list[str])
     run(["iptables", "-t", table, "-A", chain, *rule])
 
 
+def tunnel_subnet() -> str | None:
+    """Podsieć tunelu odczytana z adresu interfejsu (np. "10.77.0.0/22")."""
+    for line in run(["ip", "-4", "-o", "addr", "show", WG_INTERFACE], check=False).splitlines():
+        parts = line.split()
+        if "inet" in parts:
+            return str(ipaddress.ip_interface(parts[parts.index("inet") + 1]).network)
+    return None
+
+
 def _ensure_nat_dnat() -> None:
     """MASQUERADE dla ruchu wychodzącego przez wg-mt + DNAT portu SFTP na backend."""
-    _iptables_ensure("nat", "POSTROUTING", ["-o", WG_INTERFACE, "-j", "MASQUERADE"])
+    # Maskujemy tylko ruch SPOZA tunelu (backend z sieci dockera — routery nie znają do
+    # niej trasy). Ruch peer -> hub -> peer zachowuje adres źródłowy: inaczej Winbox
+    # z peera administracyjnego docierał do routera z adresem huba i reguła na liście
+    # mtm-admin go nie łapała, a router innego klienta podszywał się pod hub.
+    subnet = tunnel_subnet()
+    rule = ["-o", WG_INTERFACE, "-j", "MASQUERADE"]
+    if subnet:
+        rule = ["!", "-s", subnet, *rule]
+    else:
+        print("[agent] WARNING: nie odczytano podsieci tunelu, MASQUERADE dla calego ruchu", flush=True)
+    _iptables_replace("nat", "POSTROUTING", [f"-o {WG_INTERFACE}", "-j MASQUERADE"], rule)
 
     backend_ip = None
     for _ in range(30):

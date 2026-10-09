@@ -129,3 +129,37 @@ def test_interrupted_write_keeps_old_file(agent, monkeypatch):
             agent.add_peer("B", "10.9.0.3")
     assert _conf(agent) == before
     assert "B" not in agent.fake.peers
+
+
+def test_masquerade_skips_tunnel_traffic(agent, monkeypatch):
+    """Ruch peer -> hub -> peer nie jest maskowany (Winbox z peera admina ma dotrzec z jego
+    adresem), a stara regula „maskuj wszystko" z poprzedniej wersji znika."""
+    calls = []
+    existing = "-P POSTROUTING ACCEPT\n-A POSTROUTING -o wg-mt -j MASQUERADE\n" \
+               "-A POSTROUTING -d 172.22.0.3/32 -p tcp -m tcp --dport 8443 -j MASQUERADE\n"
+
+    def fake_run(cmd, check=True):
+        calls.append(cmd)
+        if cmd[:3] == ["ip", "-4", "-o"]:
+            return "5: wg-mt    inet 10.77.0.1/22 scope global wg-mt\\       valid_lft forever\n"
+        if cmd[-2:] == ["-S", "POSTROUTING"]:
+            return existing
+        return ""
+    monkeypatch.setattr(agent, "run", fake_run)
+    monkeypatch.setattr(agent.socket, "gethostbyname", lambda name: (_ for _ in ()).throw(OSError()))
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    agent._ensure_nat_dnat()
+    assert ["iptables", "-t", "nat", "-D", "POSTROUTING", "-o", "wg-mt", "-j", "MASQUERADE"] in calls
+    assert ["iptables", "-t", "nat", "-A", "POSTROUTING", "!", "-s", "10.77.0.0/22",
+            "-o", "wg-mt", "-j", "MASQUERADE"] in calls
+    # regula panelu (Caddy) nietknieta
+    assert not any(c[:5] == ["iptables", "-t", "nat", "-D", "POSTROUTING"] and "8443" in c for c in calls)
+
+
+def test_masquerade_without_subnet_falls_back(agent, monkeypatch):
+    calls = []
+    monkeypatch.setattr(agent, "run", lambda cmd, check=True: calls.append(cmd) or "")
+    monkeypatch.setattr(agent.socket, "gethostbyname", lambda name: (_ for _ in ()).throw(OSError()))
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    agent._ensure_nat_dnat()
+    assert ["iptables", "-t", "nat", "-A", "POSTROUTING", "-o", "wg-mt", "-j", "MASQUERADE"] in calls
