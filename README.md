@@ -79,7 +79,7 @@ albo wgrać własny.
 ustaw w `.env` konkretną wersję:
 
 ```
-MTM_VERSION=0.7.7
+MTM_VERSION=0.7.8
 ```
 
 Aktualne wydania: zakładka *Releases* / tagi `v*` w repozytorium (w `.env` bez litery `v`).
@@ -104,7 +104,7 @@ proces); jej nowy obraz wchodzi przy najbliższym ręcznym `docker compose up -d
 **Ręcznie** (zawsze działa, także bez usługi `updater`):
 
 ```bash
-sed -i 's/^MTM_VERSION=.*/MTM_VERSION=0.7.7/' .env && docker compose pull && docker compose up -d
+sed -i 's/^MTM_VERSION=.*/MTM_VERSION=0.7.8/' .env && docker compose pull && docker compose up -d
 ```
 
 Migracje bazy wykonują się automatycznie przy starcie i działają tylko w przód — powrót do
@@ -201,6 +201,19 @@ swojego komputera. Po połączeniu panel jest osiągalny pod **adresem huba wraz
 np. `https://10.22.20.1:8443/` — także wtedy, gdy panel nie jest wystawiony na
 żadnym publicznym interfejsie. Warto potem w **Ustawienia → Certyfikat** wystawić
 certyfikat na ten adres (jest już w podpowiedzi), żeby przeglądarka nie protestowała.
+
+### Winbox do routerów przez tunel
+
+Peery administracyjne dostają adresy z **bloku administracyjnego** — końcowego fragmentu
+podsieci tunelu (domyślnie /27, wielkość zmienisz w tej samej zakładce). W zakładce jest
+skrypt, który wklejasz **raz na każdym routerze**: sam odczytuje port Winboxa, dodaje cały
+blok do listy `mtm-admin` i wstawia regułę wpuszczającą Winbox z bloku, wyłącznie przez
+tunel — tuż przed pierwszą regułą akceptującą port Winboxa, a gdy takiej nie ma, na górę
+listy. Kolejni administratorzy działają od razu, bez zmian na routerach.
+
+Router w biurze administratora dodasz jako urządzenie z zaznaczonym **Urządzenie
+administracyjne** — dostanie adres z bloku (na liście peerów jest oznaczony jako
+„urządzenie”). Zwykłe urządzenia nigdy nie dostają adresów z bloku.
 
 ## Rozwój
 

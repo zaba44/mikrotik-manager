@@ -1,5 +1,44 @@
 {% extends "base.html" %}
-{% block title %}Peery administracyjne — MikroTik Manager{% endblock %}
+{% block title %}Peery administracyjne — MikroTik Manager
+{% if block %}
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Winbox przez tunel
+        </h2>
+    </div>
+    <p class="hint">Blok administracyjny <code>{{ block }}</code> — zajęte {{ block_used }} z {{ block_usable }} {{ plural(block_usable, 'adresu', 'adresów', 'adresów') }}.
+    Wklej skrypt <b>raz na każdym routerze</b> (terminal Winboxa albo SSH). Sam odczyta port Winboxa, doda blok
+    do listy <code>mtm-admin</code> i wstawi regułę „MTM: Winbox dla adminow" tuż przed pierwszą regułą
+    akceptującą port Winboxa, a gdy takiej nie ma — na górę listy. Ruch wpuszcza tylko z bloku i tylko
+    przez tunel (<code>wg-mt</code>). Kolejne peery i urządzenia administracyjne działają bez zmian na routerach.
+    Skrypt można uruchamiać wielokrotnie: istniejącej reguły nie przesuwa, poprawia port, podmienia
+    wpis bloku po zmianie wielkości i usuwa dawne wpisy pojedynczych peerów.</p>
+    <div class="code-block">
+        <div class="code-head">
+            <span>Winbox dla adminów · wszystkie routery</span>
+            <button type="button" class="copy-btn">Kopiuj</button>
+        </div>
+        <pre>{{ winbox_script }}</pre>
+    </div>
+
+    <form method="post" action="/settings/admin-peers/block" style="margin-top:1rem; max-width: 520px;"
+          data-confirm="Zmienić wielkość bloku administracyjnego? Na routerach trzeba będzie ponownie wkleić skrypt.">
+        <label for="prefix">Wielkość bloku administracyjnego</label>
+        <select id="prefix" name="prefix">
+            {% for p, n in block_choices %}
+            <option value="{{ p }}" {% if p == block_prefix %}selected{% endif %}>/{{ p }} — {{ n }} {{ plural(n, 'adres', 'adresy', 'adresów') }}</option>
+            {% endfor %}
+        </select>
+        <p class="hint">Blok to koniec podsieci tunelu. Zmniejszyć można tylko, gdy żaden peer ani urządzenie
+        administracyjne nie wypadnie poza nowy blok; powiększyć — gdy w dołączanym obszarze nie ma zwykłych
+        urządzeń (dostałyby Winbox do całej floty). Po zmianie wklej skrypt ponownie na routerach.</p>
+        <p class="form-foot"><button type="submit" class="button-ghost">Zapisz wielkość bloku</button></p>
+    </form>
+</section>
+{% endif %}
+{% endblock %}
 {% block content %}
 {% set active_tab = 'admin' %}
 <div class="page-head">
@@ -12,6 +51,7 @@
 {% include "_settings_tabs.html" %}
 
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
 
 {% if new_peer %}
 <section class="panel glow-card">
@@ -24,8 +64,8 @@
     </div>
     <p class="notice">Zaimportuj poniższą konfigurację w kliencie WireGuard (np. na PC) — plik <code>.conf</code>
     albo skopiuj tekst. Klucz prywatny jest w tej konfiguracji, więc trzymaj ją bezpiecznie.
-    <strong>Firewall na urządzeniach nie jest ruszany</strong> — na razie peer daje łączność tunelem;
-    dostęp do Winboxa konkretnych routerów dojdzie osobno (przez API).</p>
+    Adres jest z bloku administracyjnego, więc Winbox działa od razu na routerach, na których
+    wklejono skrypt z sekcji „Winbox przez tunel" — niczego nie trzeba na nich zmieniać.</p>
     <div class="code-block">
         <div class="code-head">
             <span>wireguard · {{ new_peer.name }} ({{ new_peer.wg_ip }})</span>
@@ -43,8 +83,10 @@
             Nowy peer administracyjny
         </h2>
     </div>
-    <p class="hint">Peer dla komputera zarządzającego. Dostaje adres z końca puli WG i config z
-    <code>AllowedIPs</code> = cała podsieć, więc widzi wszystkie urządzenia przez tunel.</p>
+    <p class="hint">Peer dla komputera zarządzającego. Dostaje adres z bloku administracyjnego
+    {% if block %}(<code>{{ block }}</code>){% endif %} i config z <code>AllowedIPs</code> = cała podsieć,
+    więc widzi wszystkie urządzenia przez tunel. Router w biurze dodasz jako urządzenie z zaznaczonym
+    „Urządzenie administracyjne".</p>
     <form method="post" action="/settings/admin-peers">
         <label for="name">Nazwa (np. „Laptop Dominik")</label>
         <input type="text" id="name" name="name" required>
@@ -59,16 +101,22 @@
             Peery administracyjne
         </h2>
     </div>
-    {% if peers %}
+    {% if outside_peers %}
+    <p class="error">Poza blokiem {{ block }}: {% for p in outside_peers %}<b>{{ p.name }}</b> ({{ p.wg_ip }}){% if not loop.last %}, {% endif %}{% endfor %}.
+    Routery nie wpuszczą z {{ 'tego adresu' if outside_peers | length == 1 else 'tych adresów' }} Winboxa — usuń
+    i wygeneruj peera ponownie (dostanie adres z bloku) albo powiększ blok.</p>
+    {% endif %}
+    {% if peers or admin_devices %}
     <div class="table-wrap">
         <table>
             <thead>
-                <tr><th>Nazwa</th><th>WG IP</th><th>Status</th><th>Dodano</th><th></th></tr>
+                <tr><th>Nazwa</th><th>Rodzaj</th><th>WG IP</th><th>Status</th><th>Dodano</th><th></th></tr>
             </thead>
             <tbody>
                 {% for peer in peers %}
                 <tr>
                     <td>{{ peer.name }}</td>
+                    <td><span class="pill pill-idle">peer</span></td>
                     <td><span class="chip">{{ peer.wg_ip }}</span></td>
                     <td>
                         {% if peer.last_polled_at is none %}<span class="pill pill-idle">nie sprawdzono</span>
@@ -87,6 +135,16 @@
                     </td>
                 </tr>
                 {% endfor %}
+                {% for device in admin_devices %}
+                <tr>
+                    <td><a href="/devices/{{ device.id }}">{{ device.name }}</a></td>
+                    <td><span class="pill pill-warn" title="Urządzenie zarejestrowane w portalu z adresem z bloku administracyjnego">urządzenie</span></td>
+                    <td><span class="chip">{{ device.wg_ip }}</span></td>
+                    <td>{% include "_status_badge.html" %}</td>
+                    <td>{{ device.created_at | dt("%Y-%m-%d %H:%M") }}</td>
+                    <td><a href="/devices/{{ device.id }}">otwórz</a></td>
+                </tr>
+                {% endfor %}
             </tbody>
         </table>
     </div>
@@ -94,4 +152,43 @@
     <p class="empty">Brak peerów administracyjnych. Wygeneruj pierwszego powyżej.</p>
     {% endif %}
 </section>
+
+{% if block %}
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Winbox przez tunel
+        </h2>
+    </div>
+    <p class="hint">Blok administracyjny <code>{{ block }}</code> — zajęte {{ block_used }} z {{ block_usable }} {{ plural(block_usable, 'adresu', 'adresów', 'adresów') }}.
+    Wklej skrypt <b>raz na każdym routerze</b> (terminal Winboxa albo SSH). Sam odczyta port Winboxa, doda blok
+    do listy <code>mtm-admin</code> i wstawi regułę „MTM: Winbox dla adminow" tuż przed pierwszą regułą
+    akceptującą port Winboxa, a gdy takiej nie ma — na górę listy. Ruch wpuszcza tylko z bloku i tylko
+    przez tunel (<code>wg-mt</code>). Kolejne peery i urządzenia administracyjne działają bez zmian na routerach.
+    Skrypt można uruchamiać wielokrotnie: istniejącej reguły nie przesuwa, poprawia port, podmienia
+    wpis bloku po zmianie wielkości i usuwa dawne wpisy pojedynczych peerów.</p>
+    <div class="code-block">
+        <div class="code-head">
+            <span>Winbox dla adminów · wszystkie routery</span>
+            <button type="button" class="copy-btn">Kopiuj</button>
+        </div>
+        <pre>{{ winbox_script }}</pre>
+    </div>
+
+    <form method="post" action="/settings/admin-peers/block" style="margin-top:1rem; max-width: 520px;"
+          data-confirm="Zmienić wielkość bloku administracyjnego? Na routerach trzeba będzie ponownie wkleić skrypt.">
+        <label for="prefix">Wielkość bloku administracyjnego</label>
+        <select id="prefix" name="prefix">
+            {% for p, n in block_choices %}
+            <option value="{{ p }}" {% if p == block_prefix %}selected{% endif %}>/{{ p }} — {{ n }} {{ plural(n, 'adres', 'adresy', 'adresów') }}</option>
+            {% endfor %}
+        </select>
+        <p class="hint">Blok to koniec podsieci tunelu. Zmniejszyć można tylko, gdy żaden peer ani urządzenie
+        administracyjne nie wypadnie poza nowy blok; powiększyć — gdy w dołączanym obszarze nie ma zwykłych
+        urządzeń (dostałyby Winbox do całej floty). Po zmianie wklej skrypt ponownie na routerach.</p>
+        <p class="form-foot"><button type="submit" class="button-ghost">Zapisz wielkość bloku</button></p>
+    </form>
+</section>
+{% endif %}
 {% endblock %}

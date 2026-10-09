@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.admin_block import get_block
 from app.config import settings
 from app.models import AdminPeer, Device
 from app.wg_config import wg
@@ -51,6 +52,10 @@ def generate_preshared_key() -> str:
     return base64.b64encode(secrets.token_bytes(32)).decode()
 
 
+class AdminBlockFull(RuntimeError):
+    pass
+
+
 # Klucz blokady doradczej PostgreSQL dla puli adresow tunelu (dowolna stala, byle wlasna).
 _IP_POOL_LOCK = 0x6D746D5F69707031  # "mtm_ipp1"
 
@@ -66,46 +71,44 @@ async def _lock_ip_pool(session: AsyncSession) -> None:
     await session.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _IP_POOL_LOCK})
 
 
-async def allocate_ip(session: AsyncSession) -> str:
-    await _lock_ip_pool(session)
-    network = ipaddress.ip_network(wg.subnet)
-    server_ip = ipaddress.ip_address(wg.server_ip)
-
-    # Wspolna ewidencja: urzadzenia ORAZ peery administracyjne. Te drugie ida od konca puli,
-    # wiec kolizja wychodzila dopiero przy prawie pelnej podsieci — ale wtedy po cichu,
-    # dwa peery z tym samym adresem (wytkniete w recenzji zewnetrznej; alokator adminow od
-    # poczatku sprawdzal urzadzenia, ten nie sprawdzal adminow).
-    result = await session.execute(select(Device.wg_ip))
-    used = {ipaddress.ip_address(row[0]) for row in result.all()}
-    for row in (await session.execute(select(AdminPeer.wg_ip))).all():
-        used.add(ipaddress.ip_address(row[0]))
-    used.add(server_ip)
-
-    for host in network.hosts():
-        if host not in used:
-            return str(host)
-
-    raise RuntimeError("Brak wolnych adresów IP w puli WG_SUBNET")
-
-
-async def allocate_admin_ip(session: AsyncSession) -> str:
-    """Adres dla peera administracyjnego — z KOŃCA puli (schodząc od góry), żeby nie
-    kolidować z urządzeniami (te idą od dołu). Bez rezerwowania osobnego bloku:
-    kolizja z alokacją urządzeń nastąpiłaby dopiero przy wypełnieniu całej podsieci."""
-    await _lock_ip_pool(session)
-    network = ipaddress.ip_network(wg.subnet)
-    server_ip = ipaddress.ip_address(wg.server_ip)
-
-    used = {server_ip}
+async def _used_addresses(session: AsyncSession) -> set:
+    # Wspolna ewidencja: urzadzenia ORAZ peery administracyjne (wytkniete w recenzji
+    # zewnetrznej — kolizja wychodzila po cichu, dwa peery z tym samym adresem).
+    used = {ipaddress.ip_address(wg.server_ip)}
     for row in (await session.execute(select(Device.wg_ip))).all():
         used.add(ipaddress.ip_address(row[0]))
     for row in (await session.execute(select(AdminPeer.wg_ip))).all():
         used.add(ipaddress.ip_address(row[0]))
+    return used
 
-    network_int = int(network.network_address)
-    for ip_int in range(int(network.broadcast_address) - 1, network_int, -1):
+
+async def allocate_ip(session: AsyncSession) -> str:
+    """Adres zwyklego urzadzenia — od dolu puli, NIGDY z bloku administracyjnego: kazdy
+    adres z bloku ma na routerach floty dostep do Winboxa."""
+    await _lock_ip_pool(session)
+    network = ipaddress.ip_network(wg.subnet)
+    used = await _used_addresses(session)
+    block = await get_block(session)
+
+    for host in network.hosts():
+        if host not in used and host not in block:
+            return str(host)
+
+    raise RuntimeError("Brak wolnych adresów IP w puli WG_SUBNET (poza blokiem administracyjnym)")
+
+
+async def allocate_admin_ip(session: AsyncSession) -> str:
+    """Adres administracyjny (peer admina albo urzadzenie administracyjne) — z bloku
+    administracyjnego, od jego gory. Poza blok nie wychodzi: tam regula Winboxa na routerach
+    by go nie wpuscila."""
+    await _lock_ip_pool(session)
+    network = ipaddress.ip_network(wg.subnet)
+    used = await _used_addresses(session)
+    block = await get_block(session)
+
+    for ip_int in range(int(network.broadcast_address) - 1, int(block.network_address) - 1, -1):
         candidate = ipaddress.ip_address(ip_int)
         if candidate not in used:
             return str(candidate)
 
-    raise RuntimeError("Brak wolnych adresów IP w puli WG_SUBNET")
+    raise AdminBlockFull(f"Blok administracyjny {block} jest pełny — powiększ go w Ustawieniach → Peery administracyjne.")

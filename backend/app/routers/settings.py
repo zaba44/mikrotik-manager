@@ -1,11 +1,12 @@
 import datetime
+import ipaddress
 import os
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
-from app import portal_update, timefmt
+from app import admin_block, portal_update, timefmt
 from app import version as app_version
 from app.portal_backup import BackupError, export_portal, pending_restore, resume_pending_restore
 from sqlalchemy import select
@@ -35,9 +36,11 @@ from app.notifications import (
 )
 from app.queries import list_admin_peers, list_locations
 from app.routeros_client import disable_syslog
+from app.security import AdminBlockFull
 from app.settings_store import get_backup_settings, get_setting, get_syslog_settings, set_setting
 from app.templating import templates
 from app.weekly_report import build_weekly_report
+from app.wg_config import wg
 
 router = APIRouter(prefix="/settings")
 
@@ -469,21 +472,47 @@ async def portal_backup_route(
 
 # ---- Zakładka: Peery administracyjne ----
 
-async def _render_admin_peers(request, session, *, new_peer=None, new_config=None, error=None, status_code=200):
+async def _render_admin_peers(request, session, *, new_peer=None, new_config=None, error=None,
+                              notice=None, status_code=200):
     peers = await list_admin_peers(session)
     nav_locations = await list_locations(session)
-    return templates.TemplateResponse(
-        "settings_admin_peers.html",
-        {
-            "request": request,
-            "peers": peers,
-            "nav_locations": nav_locations,
-            "new_peer": new_peer,
-            "new_config": new_config,
-            "error": error,
-        },
-        status_code=status_code,
-    )
+    ctx = {"request": request, "peers": peers, "nav_locations": nav_locations, "new_peer": new_peer,
+           "new_config": new_config, "error": error, "notice": notice, "block": None}
+    if wg.configured:
+        block = await admin_block.get_block(session)
+        prefix = block.prefixlen
+        _, admin_devices = await admin_block.members(session, block)
+        ctx.update({
+            "block": block,
+            "block_prefix": prefix,
+            "block_choices": [(p, admin_block.usable(wg.subnet, p)) for p in admin_block.choices(wg.subnet)],
+            "block_used": len([p for p in peers if ipaddress.ip_address(p.wg_ip) in block]) + len(admin_devices),
+            "block_usable": admin_block.usable(wg.subnet, prefix),
+            "admin_devices": admin_devices,
+            # peery sprzed bloku (albo po recznej zmianie) — Winbox z nich nie zadziala
+            "outside_peers": [p for p in peers if ipaddress.ip_address(p.wg_ip) not in block],
+            "winbox_script": admin_block.winbox_script(str(block)),
+        })
+    return templates.TemplateResponse("settings_admin_peers.html", ctx, status_code=status_code)
+
+
+@router.post("/admin-peers/block")
+async def set_admin_block(request: Request, prefix: int = Form(...), session: AsyncSession = Depends(get_session)):
+    if not wg.configured:
+        return await _render_admin_peers(request, session, error="Sieć WireGuard nie jest skonfigurowana.",
+                                         status_code=400)
+    old = await admin_block.get_block(session)
+    problem = await admin_block.change_problem(session, prefix)
+    if problem:
+        return await _render_admin_peers(request, session, error=problem, status_code=409)
+    await admin_block.set_prefix(session, prefix)
+    new = await admin_block.get_block(session)
+    notice = None
+    if new != old:
+        notice = (f"Blok administracyjny zmieniony z {old} na {new}. Wklej skrypt poniżej ponownie na routerach "
+                  "floty — podmieni wpis zakresu na liście mtm-admin. Do tego czasu routery wpuszczają Winbox "
+                  f"tylko z {old}.")
+    return await _render_admin_peers(request, session, notice=notice)
 
 
 @router.get("/admin-peers")
@@ -499,6 +528,9 @@ async def create_admin_peer_route(
         return await _render_admin_peers(request, session, error="Podaj nazwę peera.", status_code=400)
     try:
         peer, warning = await create_admin_peer(session, name)
+    except AdminBlockFull as exc:
+        await session.rollback()
+        return await _render_admin_peers(request, session, error=str(exc), status_code=409)
     except IntegrityError:
         await session.rollback()
         return await _render_admin_peers(

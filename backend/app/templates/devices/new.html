@@ -27,6 +27,15 @@
         <label for="notes">Notatki (informacje sieciowe, konfiguracja, cokolwiek trzeba zapamiętać)</label>
         <textarea id="notes" name="notes" rows="10">{{ prefill_notes or "" }}</textarea>
 
+        <label style="display:flex; align-items:center; gap:0.55rem; cursor:pointer; margin-top:0.9rem;">
+            <input type="checkbox" name="admin_device" value="1" style="width:auto; margin:0;" {% if prefill_admin %}checked{% endif %}>
+            <b>Urządzenie administracyjne</b>
+        </label>
+        <p class="hint">Np. router w Twoim biurze. Dostaje adres z bloku administracyjnego, więc — jak peery
+        administracyjne — ma Winbox do routerów floty, na których wklejono skrypt
+        z <a href="/settings/admin-peers">Ustawienia → Peery administracyjne</a>. Zaznacz tylko dla
+        urządzeń, którym ufasz jak własnemu komputerowi.</p>
+
         <p class="hint">Router musi mieć <strong>RouterOS {{ ros_min }} lub nowszy</strong> — sprawdzisz w Winboksie
         (System → Resources). Wygenerowany skrypt sam to weryfikuje i na starszym routerze niczego nie zmieni.</p>
         <p class="form-foot"><button type="submit">Zarejestruj i wygeneruj config</button></p>

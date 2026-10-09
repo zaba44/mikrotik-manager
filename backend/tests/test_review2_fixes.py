@@ -596,6 +596,9 @@ class _AllocSession:
         self.statements.append(str(stmt))
         return _R()
 
+    async def get(self, model, key):  # ustawienia (wielkosc bloku administracyjnego)
+        return None
+
 
 @pytest.mark.parametrize("allocator", ["allocate_ip", "allocate_admin_ip"])
 def test_ip_allocators_take_pool_lock_first(monkeypatch, allocator):

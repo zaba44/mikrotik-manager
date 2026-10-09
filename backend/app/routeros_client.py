@@ -60,7 +60,9 @@ async def get_status(device: Device) -> dict:
                 svc_resp = await client.get(f"{_base_url(device)}/rest/ip/service")
                 svc_resp.raise_for_status()
                 for svc in svc_resp.json():
-                    if svc.get("name") == "winbox":
+                    # od 7.23 lista zawiera tez dynamiczne wpisy aktywnych polaczen
+                    # (connection=true, port klienta) — liczy sie tylko wpis uslugi
+                    if svc.get("name") == "winbox" and svc.get("connection") != "true" and svc.get("dynamic") != "true":
                         winbox_port = svc.get("port")
                         break
             except Exception:

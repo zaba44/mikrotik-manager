@@ -1,4 +1,5 @@
 import datetime
+import ipaddress
 import re
 import os
 import uuid
@@ -16,10 +17,10 @@ from app.auth import can_operate, is_admin, require_admin, require_location, req
 from app.backup_service import backup_device
 from app.config import settings
 from app.database import async_session, get_session
-from app import local_address
+from app import admin_block, local_address
 from app.log_report import build_report, content_disposition
 from app.log_store import purge
-from app.models import (AdminPeer, Backup, Device, DeviceLogEntry, NotificationOverride, PingTarget,
+from app.models import (Backup, Device, DeviceLogEntry, NotificationOverride, PingTarget,
                         PoeLockedPort, UpdateRun, UpdateRunStep)
 from app.notifications import scope_view
 from app.notify_forms import apply_scope_form as _apply_scope_form
@@ -42,6 +43,8 @@ from app.routeros_client import (
 )
 from app.settings_store import get_setting
 from app.security import (
+    AdminBlockFull,
+    allocate_admin_ip,
     allocate_ip,
     decrypt,
     encrypt,
@@ -153,37 +156,6 @@ def _fw_rule(args: str) -> str:
 # Petla czeka na klucz prywatny (najwyzej 60 s) zamiast stalego `:delay`.
 
 
-WINBOX_ADDRESS_LIST = "mtm-admin"
-
-
-def build_winbox_rule_script(device: Device, peers: list) -> str:
-    """Gotowy do skopiowania fragment configu, który otwiera Winbox tego routera dla
-    komputerów administracyjnych (peery WG admina), przez tunel.
-
-    Portal NICZEGO tu nie wysyła na router — użytkownik wkleja sam i sam ustawia regułę
-    w odpowiednim miejscu łańcucha. Świadomie BEZ `place-before=`: przy generatorze
-    rejestracji wstawiamy reguły na górę, ale firewalle w terenie są różne i kolejność
-    jest decyzją administratora."""
-    port = device.routeros_winbox_port or "8291"
-    port_note = "" if device.routeros_winbox_port else (
-        "# UWAGA: portal nie zna jeszcze portu Winbox tego routera (nie odpytano go przez API),\n"
-        "# poniżej wstawiono domyślny 8291 — sprawdź i popraw, jeśli masz inny.\n"
-    )
-    entries = "\n".join(
-        f'/ip firewall address-list add list={WINBOX_ADDRESS_LIST} address={p.wg_ip} '
-        f'comment="MTM admin: {ros_quote(p.name)}"'
-        for p in peers
-    )
-    return f"""{port_note}# 1) Adresy komputerów administracyjnych (peery WG portalu)
-{entries}
-
-# 2) Reguła wpuszczająca Winbox z tej listy, wyłącznie przez tunel
-/ip firewall filter add chain=input protocol=tcp dst-port={port} \\
-    src-address-list={WINBOX_ADDRESS_LIST} in-interface=wg-mt action=accept \\
-    comment="MTM: Winbox dla adminow"
-"""
-
-
 def build_removal_script() -> str:
     # Reguły logowania zdejmujemy PRZED akcją — akcja z podpiętą regułą się nie usunie.
     return """/system logging remove [find action="mtmsyslog"]
@@ -231,9 +203,23 @@ async def create_device(
     name: str = Form(...),
     location_id: str = Form(""),
     notes: str = Form(""),
+    admin_device: str = Form(""),
     session: AsyncSession = Depends(get_session),
 ):
-    device_ip = await allocate_ip(session)
+    # Urzadzenie administracyjne (np. router w biurze admina) dostaje adres z bloku
+    # administracyjnego — ma wtedy Winbox do routerow floty jak peer admina.
+    try:
+        device_ip = await (allocate_admin_ip if admin_device else allocate_ip)(session)
+    except AdminBlockFull as exc:
+        await session.rollback()
+        locations = await list_locations(session)
+        return templates.TemplateResponse(
+            "devices/new.html",
+            {"request": request, "locations": locations, "nav_locations": locations,
+             "selected_location_id": location_id, "error": str(exc), "prefill_name": name,
+             "prefill_notes": notes, "prefill_admin": True},
+            status_code=409,
+        )
     client_private_key, client_public_key = generate_wg_keypair()
     preshared_key = generate_preshared_key()
     api_username = "mtm-api"
@@ -268,6 +254,7 @@ async def create_device(
                 "(albo wystąpił rzadki konflikt przydziału IP). Spróbuj ponownie.",
                 "prefill_name": name,
                 "prefill_notes": notes,
+                "prefill_admin": bool(admin_device),
             },
             status_code=409,
         )
@@ -508,22 +495,23 @@ async def device_syslog_fragment(
 async def device_winbox_rule_fragment(
     request: Request, device_id: str, session: AsyncSession = Depends(get_session)
 ):
-    """Gotowa reguła firewalla otwierająca Winbox dla peerów admina — do skopiowania
-    i wklejenia ręcznie. Admin-only, bo to element konfiguracji routera."""
+    """Skrypt otwierajacy Winbox dla bloku administracyjnego — ten sam dla calej floty
+    (port czyta sam z routera). Admin-only, bo to element konfiguracji routera."""
     user = request.state.user
     if not user or user.role != "admin":
         raise HTTPException(status_code=403, detail="Tylko administrator")
     device = await session.get(Device, _parse_uuid(device_id))
     if device is None:
         raise HTTPException(status_code=404, detail="Nie znaleziono urządzenia")
-    peers = (await session.execute(select(AdminPeer).order_by(AdminPeer.name))).scalars().all()
+    block = await admin_block.get_block(session) if wg.configured else None
     return templates.TemplateResponse(
         "_device_winbox_rule.html",
         {
             "request": request,
             "device": device,
-            "peers": peers,
-            "script": build_winbox_rule_script(device, peers) if peers else "",
+            "block": block,
+            "is_admin_device": block is not None and ipaddress.ip_address(device.wg_ip) in block,
+            "script": admin_block.winbox_script(str(block)) if block else "",
         },
     )
 
