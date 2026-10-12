@@ -132,9 +132,12 @@ def build_routeros_script(
         _fw_rule(f'protocol=tcp dst-port=443 src-address={wg.server_ip}/32 in-interface=wg-mt action=accept '
                  'comment="MTM: REST API z huba"'),
         f"/certificate add name=mtm-cert common-name={device_ip} days-valid=3650",
+        # port=443: portal i regula wyzej zakladaja 443, a router z wczesniej ustawionym losowym
+        # portem www-ssl (AGA_KOMPOZYTY: 43119) mial „WG OK, API nie". Losowy port nic tu nie
+        # chroni — available-from i tak wpuszcza wylacznie hub.
         "/certificate sign mtm-cert; :local w 0; :while (([/certificate get [find name=mtm-cert] private-key] != true) "
         f"&& ($w < 60)) do={{:delay 1s; :set w ($w + 1)}}; "
-        f"/ip service set www-ssl address={wg.server_ip}/32 certificate=mtm-cert disabled=no",
+        + _service_set(f"{wg.server_ip}/32", "port=443 certificate=mtm-cert disabled=no"),
         ':put "MTM: gotowe - urzadzenie powinno pojawic sie w portalu w ciagu minuty."',
         "}",
     ]
@@ -157,13 +160,25 @@ def _fw_rule(args: str) -> str:
 # Petla czeka na klucz prywatny (najwyzej 60 s) zamiast stalego `:delay`.
 
 
+def _service_set(source: str, rest: str) -> str:
+    """`/ip service set www-ssl` z ograniczeniem adresow zrodlowych. RouterOS 7.24 przemianowal
+    `address` na `available-from` (stara nazwa dziala, ale terminal wypisuje „Preceding
+    keywords will be removed in future versions"), a 7.23 i starsze znaja tylko `address`.
+    Najpierw nowa nazwa, przy bledzie — stara. Obie w `:parse`: tresc jest kompilowana dopiero
+    przy wykonaniu, wiec 7.23 nie odrzuca calego bloku za nieznany parametr, a 7.24 nie widzi
+    przestarzalego slowa. Sprawdzone na 7.23.2 (blad przechwycony, uzyte `address`)."""
+    cmd = "/ip service set www-ssl {key}=" + source + " " + rest
+    return (f':do {{[[:parse "{cmd.format(key="available-from")}"]]}} '
+            f'on-error={{[[:parse "{cmd.format(key="address")}"]]}}')
+
+
 def build_removal_script() -> str:
     # Reguły logowania zdejmujemy PRZED akcją — akcja z podpiętą regułą się nie usunie.
     return """/system logging remove [find action="mtmsyslog"]
 /system logging action remove [find name="mtmsyslog"]
 /ip firewall filter remove [find comment~"MTM:"]
 /ip route remove [find comment~"MTM:"]
-/ip service set www-ssl address="" certificate=none
+""" + _service_set('\\"\\"', "certificate=none") + """
 /certificate remove [find name=mtm-cert]
 /user remove [find name=mtm-api]
 /user group remove [find name=mtm-api]

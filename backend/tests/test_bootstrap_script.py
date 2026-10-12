@@ -61,4 +61,22 @@ def test_firewall_rules_work_with_empty_filter_list(monkeypatch):
 def test_script_uses_configured_hub(monkeypatch):
     s = _script(monkeypatch)
     assert "endpoint-address=hub.example.org" in s and "address=10.77.0.2/22 interface=wg-mt" in s
-    assert "www-ssl address=10.77.0.1/32" in s and 'preshared-key="PSK="' in s
+    assert "www-ssl available-from=10.77.0.1/32" in s and 'preshared-key="PSK="' in s
+
+
+def test_service_restriction_new_name_first_old_as_fallback(monkeypatch):
+    """7.24 przemianowal `address` na `available-from` (stara nazwa -> „Preceding keywords will
+    be removed"); 7.23 zna tylko `address`. Najpierw nowa, przy bledzie stara — obie w :parse,
+    zeby 7.23 nie odrzucil bloku przy kompilacji, a 7.24 nie zobaczyl przestarzalego slowa."""
+    from app.routers.devices import build_removal_script
+    line = next(x for x in _script(monkeypatch).splitlines() if "/ip service set www-ssl" in x)
+    tail = line[line.index(':do {[[:parse "/ip service set www-ssl'):]
+    assert tail == (':do {[[:parse "/ip service set www-ssl available-from=10.77.0.1/32 port=443 certificate=mtm-cert '
+                    'disabled=no"]]} on-error={[[:parse "/ip service set www-ssl address=10.77.0.1/32 port=443 '
+                    'certificate=mtm-cert disabled=no"]]}')
+    removal = build_removal_script()
+    assert ('available-from=\\"\\" certificate=none"]]} on-error={[[:parse "/ip service set www-ssl '
+            'address=\\"\\" certificate=none"]]}') in removal
+    for script in (line, removal):  # poza :parse slowo `address=` przy www-ssl nie wystepuje
+        outside = script.replace(tail, "") if script is line else script.split(":do {")[0]
+        assert "www-ssl address=" not in outside
