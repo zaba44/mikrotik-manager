@@ -1,0 +1,60 @@
+{# Przebieg aktualizacji lokalizacji: skrot (wiersz na urzadzenie), kroki pod rozwinieciem.
+   Udany przebieg starszy niz godzina i „zwiniety" blad pokazuja jedna linie
+   (update_summary.collapsed); wczesniejsze przebiegi — zawsze zwiniete. #}
+{% from "_update_steps_table.html" import steps_table %}
+{% macro run_block(run, location_id, can_operate=false, history=false) %}
+{% set summary = run_summary(run) %}
+{% set c = run_counts(summary) %}
+{% set fold = history or run_collapsed(run) %}
+{% set key = run.id | string %}
+<div class="runlog{% if history %} runlog-past{% endif %}">
+    <div class="runlog-head">
+        {% if history %}<strong>{{ run.started_at | dt("%Y-%m-%d %H:%M") }}</strong>
+        {% elif run.status == "running" %}<strong>Aktualizacja w toku…</strong>
+        {% elif run.status == "succeeded" %}<strong>Ostatnia aktualizacja: sukces</strong>
+        {% elif run.status == "aborted" %}<strong>Ostatnia aktualizacja: przerwana</strong>
+        {% else %}<strong>Ostatnia aktualizacja: błąd</strong>
+        {% endif %}
+        <span class="pill {% if run.status == 'running' %}pill-warn{% elif run.status == 'succeeded' %}pill-ok{% else %}pill-bad{% endif %}">{% if run.status == 'running' %}<span class="dot"></span>{% endif %}{{ run.status }}</span>
+        <span class="empty">{% if not history %}{{ run.started_at | dt("%Y-%m-%d %H:%M") }}{% endif %}{% if run.finished_at %} – {{ run.finished_at | dt("%H:%M") }}{% endif %}
+            · {{ summary | length }} {{ plural(summary | length, 'urządzenie', 'urządzenia', 'urządzeń') }}{% if c.succeeded %}, {{ c.succeeded }} zaktualizowan{{ plural(c.succeeded, 'e', 'e', 'ych') }}{% endif %}{% if c.skipped %}, {{ c.skipped }} już aktualn{{ plural(c.skipped, 'e', 'e', 'ych') }}{% endif %}{% if c.failed %}, {{ c.failed }} z błędem{% endif %}</span>
+        {% if run.acknowledged_at %}<span class="empty">· zwinięte: {{ run.acknowledged_by or "—" }}, {{ run.acknowledged_at | dt("%Y-%m-%d %H:%M") }}</span>{% endif %}
+        {% if not history and can_operate and run.status in ("failed", "aborted") and not run.acknowledged_at %}
+        <form method="post" action="/locations/{{ location_id }}/update-runs/{{ run.id }}/acknowledge" class="bare" style="margin-left:auto;">
+            <button type="submit" class="button-ghost button-sm" title="Błąd przyjęty do wiadomości — zostanie jedna linia, szczegóły pod rozwinięciem">Zwiń</button>
+        </form>
+        {% endif %}
+    </div>
+    {% if run.error_message %}<p class="error">{{ run.error_message }}</p>{% endif %}
+    {% if summary %}
+    {% if fold %}<details class="runlog-fold" data-keep="fold-{{ key }}"><summary>pokaż szczegóły</summary>{% endif %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Urządzenie</th><th>Wynik</th><th>RouterOS</th><th>Firmware</th><th>Czas</th><th>Uwagi</th></tr></thead>
+            <tbody>
+                {% for row in summary %}
+                <tr>
+                    <td>{{ row.name }}</td>
+                    <td>
+                        {% if row.status == "succeeded" %}<span class="pill pill-ok">ok</span>
+                        {% elif row.status == "skipped" %}<span class="pill pill-idle">aktualne</span>
+                        {% elif row.status == "running" %}<span class="pill pill-warn"><span class="dot"></span>trwa</span>
+                        {% else %}<span class="pill pill-bad">błąd</span>{% endif %}
+                    </td>
+                    <td>{{ row.routeros or "—" }}</td>
+                    <td>{{ row.firmware or "—" }}</td>
+                    <td>{{ row.duration or "—" }}</td>
+                    <td style="white-space:normal;">{% if row.current %}{{ row.current }}{% else %}<span class="empty">—</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <details class="runlog-fold" data-keep="steps-{{ key }}">
+        <summary>wszystkie kroki ({{ run.steps | length }})</summary>
+        {{ steps_table(run.steps) }}
+    </details>
+    {% if fold %}</details>{% endif %}
+    {% endif %}
+</div>
+{% endmacro %}

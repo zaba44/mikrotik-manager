@@ -50,7 +50,8 @@ def _is_operational_write(path: str) -> bool:
         return (path.endswith(("/update", "/reboot", "/check-updates", "/poe/set", "/poe/cycle",
                                "/addresses/pin", "/addresses/unpin"))
                 or "/ping" in path)
-    return path.startswith("/locations/") and path.endswith("/update-all")
+    # „Zwiń" nieudanej aktualizacji — ten sam krag co jej uruchomienie.
+    return path.startswith("/locations/") and path.endswith(("/update-all", "/acknowledge"))
 
 
 @asynccontextmanager

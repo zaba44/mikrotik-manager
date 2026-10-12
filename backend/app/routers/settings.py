@@ -77,12 +77,14 @@ async def update_settings(
     request: Request,
     backup_schedule_hours: str = Form(...),
     backup_retention_count: str = Form(...),
+    update_runs_keep: str = Form("10"),
     session: AsyncSession = Depends(get_session),
 ):
     nav_locations = await list_locations(session)
     try:
         schedule_hours = max(1, int(backup_schedule_hours))
         retention_count = max(1, int(backup_retention_count))
+        runs_keep = max(1, int(update_runs_keep))
     except ValueError:
         backup_settings = await get_backup_settings(session)
         return templates.TemplateResponse(
@@ -91,13 +93,14 @@ async def update_settings(
                 "request": request,
                 "backup_settings": backup_settings,
                 "nav_locations": nav_locations,
-                "error": "Częstotliwość i retencja muszą być liczbami całkowitymi.",
+                "error": "Częstotliwość, retencja i historia aktualizacji muszą być liczbami całkowitymi.",
             },
             status_code=400,
         )
 
     await set_setting(session, "backup_schedule_hours", str(schedule_hours))
     await set_setting(session, "backup_retention_count", str(retention_count))
+    await set_setting(session, "update_runs_keep", str(runs_keep))
     return RedirectResponse(url="/settings", status_code=303)
 
 

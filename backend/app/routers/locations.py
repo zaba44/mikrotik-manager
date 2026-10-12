@@ -8,7 +8,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.timefmt import utc_now_aware
+from app.timefmt import utc_now_aware, utcnow
 from app.auth import current_user, is_admin, require_location, require_operate_location
 from app.database import get_session
 from app.log_report import build_report, content_disposition
@@ -16,7 +16,7 @@ from app.log_store import purge
 from app.notifications import scope_view
 from app.notify_forms import apply_scope_form
 from app.models import Device, Location, NotificationOverride, UpdateRun, User
-from app.queries import latest_location_run, list_locations
+from app.queries import list_locations, location_runs
 from app.templating import templates
 from app.update_orchestrator import run_location_update
 
@@ -160,11 +160,11 @@ async def location_detail(request: Request, location_id: str, err: str = "",
 
     devices = await _devices_at(session, location.id)
     nav_locations = await list_locations(session)
-    run = await latest_location_run(session, location.id)
+    run, previous = await location_runs(session, location.id)
     return templates.TemplateResponse(
         "locations/detail.html",
         {"request": request, "location": location, "devices": devices, "nav_locations": nav_locations,
-         "run": run, "error": err or None},
+         "run": run, "previous": previous, "error": err or None},
     )
 
 
@@ -190,7 +190,7 @@ async def update_location(
         await session.refresh(location)
         devices = await _devices_at(session, location.id)
         nav_locations = await list_locations(session)
-        run = await latest_location_run(session, location.id)
+        run, previous = await location_runs(session, location.id)
         return templates.TemplateResponse(
             "locations/detail.html",
             {
@@ -198,7 +198,7 @@ async def update_location(
                 "location": location,
                 "devices": devices,
                 "nav_locations": nav_locations,
-                "run": run,
+                "run": run, "previous": previous,
                 "error": f'Nazwa "{name.strip()}" jest już zajęta przez inną lokalizację.',
             },
             status_code=409,
@@ -206,10 +206,10 @@ async def update_location(
 
     devices = await _devices_at(session, location.id)
     nav_locations = await list_locations(session)
-    run = await latest_location_run(session, location.id)
+    run, previous = await location_runs(session, location.id)
     return templates.TemplateResponse(
         "locations/detail.html",
-        {"request": request, "location": location, "devices": devices, "nav_locations": nav_locations, "run": run},
+        {"request": request, "location": location, "devices": devices, "nav_locations": nav_locations, "run": run, "previous": previous},
     )
 
 
@@ -219,9 +219,9 @@ async def location_update_fragment(request: Request, location_id: str, session: 
     if location is None:
         raise HTTPException(status_code=404, detail="Nie znaleziono lokalizacji")
     require_location(request, location.id)
-    run = await latest_location_run(session, location.id)
+    run, previous = await location_runs(session, location.id)
     return templates.TemplateResponse(
-        "_location_update.html", {"request": request, "location": location, "run": run}
+        "_location_update.html", {"request": request, "location": location, "run": run, "previous": previous}
     )
 
 
@@ -235,6 +235,25 @@ async def start_location_update(request: Request, location_id: str, session: Asy
     request.app.state.scheduler.add_job(
         run_location_update, args=[location.id], next_run_time=utc_now_aware()
     )
+    return RedirectResponse(url=f"/locations/{location_id}", status_code=303)
+
+
+@router.post("/{location_id}/update-runs/{run_id}/acknowledge")
+async def acknowledge_update_run(request: Request, location_id: str, run_id: str,
+                                 session: AsyncSession = Depends(get_session)):
+    """„Zwiń" przy nieudanej aktualizacji: blad przyjety do wiadomosci zostaje jedna linia
+    (szczegoly pod rozwinieciem) zamiast pelnej tabeli do nastepnej aktualizacji."""
+    location = await session.get(Location, _parse_uuid(location_id))
+    if location is None:
+        raise HTTPException(status_code=404, detail="Nie znaleziono lokalizacji")
+    require_operate_location(request, location.id)
+    run = await session.get(UpdateRun, _parse_uuid(run_id))
+    if run is None or run.location_id != location.id:
+        raise HTTPException(status_code=404, detail="Nie znaleziono przebiegu")
+    if run.status in ("failed", "aborted") and run.acknowledged_at is None:
+        run.acknowledged_at = utcnow()
+        run.acknowledged_by = request.state.user.username
+        await session.commit()
     return RedirectResponse(url=f"/locations/{location_id}", status_code=303)
 
 

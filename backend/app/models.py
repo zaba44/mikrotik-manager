@@ -186,6 +186,10 @@ class UpdateRun(Base):
     started_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
     finished_at: Mapped[datetime.datetime | None]
     error_message: Mapped[str | None]
+    # Nieudany przebieg „zwiniety" przez operatora (przyjety do wiadomosci): zostaje jedna
+    # linia z bledem zamiast pelnej tabeli — czasem na naprawe czeka sie do wizyty na miejscu.
+    acknowledged_at: Mapped[datetime.datetime | None]
+    acknowledged_by: Mapped[str | None]
 
     steps: Mapped[list["UpdateRunStep"]] = relationship(back_populates="run", order_by="UpdateRunStep.started_at")
 

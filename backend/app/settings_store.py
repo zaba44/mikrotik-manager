@@ -7,6 +7,8 @@ from app.models import Setting
 _DEFAULTS = {
     "backup_schedule_hours": "24",
     "backup_retention_count": "10",
+    # Ile przebiegow aktualizacji zachowac — osobno dla kazdej lokalizacji i kazdego urzadzenia.
+    "update_runs_keep": "10",
     # 0 = trzymaj bez ograniczen; domyslnie kwartal historii zdarzen
     "syslog_retention_days": "90",
     # Globalny przełącznik — świeża instalacja startuje z syslogiem WYŁĄCZONYM.
@@ -64,7 +66,7 @@ async def set_setting(session: AsyncSession, key: str, value: str) -> None:
     await session.commit()
 
 
-_BACKUP_KEYS = ("backup_schedule_hours", "backup_retention_count")
+_BACKUP_KEYS = ("backup_schedule_hours", "backup_retention_count", "update_runs_keep")
 _SYSLOG_KEYS = ("syslog_enabled", "syslog_retention_days", "syslog_max_entries_per_device")
 
 

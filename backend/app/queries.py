@@ -40,12 +40,15 @@ async def list_device_backups(session: AsyncSession, device_id: uuid.UUID) -> li
     return list(result.scalars().all())
 
 
-async def latest_location_run(session: AsyncSession, location_id: uuid.UUID) -> UpdateRun | None:
+async def location_runs(session: AsyncSession, location_id: uuid.UUID) -> tuple[UpdateRun | None, list[UpdateRun]]:
+    """(ostatni przebieg, wczesniejsze) — ile ich jest, pilnuje `update_runs_keep`."""
     result = await session.execute(
         select(UpdateRun)
         .options(selectinload(UpdateRun.steps).selectinload(UpdateRunStep.device))
         .where(UpdateRun.location_id == location_id)
         .order_by(UpdateRun.started_at.desc())
-        .limit(1)
     )
-    return result.scalar_one_or_none()
+    runs = list(result.scalars().all())
+    return (runs[0] if runs else None), runs[1:]
+
+

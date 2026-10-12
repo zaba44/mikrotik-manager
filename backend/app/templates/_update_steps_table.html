@@ -1,0 +1,27 @@
+{# Tabela krokow przebiegu aktualizacji. Wspolna dla urzadzenia i lokalizacji. #}
+{% macro steps_table(steps) %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Urządzenie</th><th>Krok</th><th>Status</th><th>Start</th><th>Koniec</th><th>Szczegóły</th></tr>
+            </thead>
+            <tbody>
+                {% for step in steps %}
+                <tr>
+                    <td>{{ step.device.name if step.device else "—" }}</td>
+                    <td>{{ step.step_type }}</td>
+                    <td>
+                        {% if step.status == "succeeded" %}<span class="pill pill-ok">ok</span>
+                        {% elif step.status == "running" %}<span class="pill pill-warn"><span class="dot"></span>trwa</span>
+                        {% elif step.status == "skipped" %}<span class="pill pill-idle">pominięto</span>
+                        {% else %}<span class="pill pill-bad">błąd</span>{% endif %}
+                    </td>
+                    <td>{{ step.started_at | dt("%H:%M:%S") }}</td>
+                    <td>{{ step.finished_at | dt("%H:%M:%S", "—") }}</td>
+                    <td style="white-space:normal;">{{ step.detail or "—" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endmacro %}

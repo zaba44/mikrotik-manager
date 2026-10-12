@@ -3,12 +3,13 @@ import datetime
 import logging
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.config import settings
 from app.database import async_session
 from app.notifications import notify
 from app.models import Device, UpdateRun, UpdateRunStep
+from app.settings_store import get_setting
 from app.routeros_client import (
     check_for_updates,
     get_routerboard_info,
@@ -302,6 +303,7 @@ async def run_device_update(device_id: uuid.UUID, mode: str) -> None:
             run.error_message = str(e)
         run.finished_at = _utcnow()
         await session.commit()
+        await purge_old_runs(session, device_id=device.id)
 
         if run.status == "failed":
             await notify(
@@ -353,3 +355,29 @@ async def run_location_update(location_id: uuid.UUID) -> None:
         run.status = "aborted" if aborted else "succeeded"
         run.finished_at = _utcnow()
         await session.commit()
+        await purge_old_runs(session, location_id=location_id)
+
+
+async def purge_old_runs(session, *, location_id: uuid.UUID | None = None,
+                         device_id: uuid.UUID | None = None) -> int:
+    """Zostawia `update_runs_keep` ostatnich przebiegow lokalizacji (albo urzadzenia —
+    przebiegi pojedynczego urzadzenia liczone osobno). Trwajacych nie rusza. Blad sprzatania
+    nie moze zepsuc wyniku aktualizacji, wiec tylko go logujemy."""
+    try:
+        keep = max(1, int(await get_setting(session, "update_runs_keep") or 10))
+        if location_id is not None:
+            scope = (UpdateRun.scope == "location", UpdateRun.location_id == location_id)
+        else:
+            scope = (UpdateRun.scope == "device", UpdateRun.device_id == device_id)
+        old = (await session.execute(
+            select(UpdateRun.id).where(*scope, UpdateRun.status != "running")
+            .order_by(UpdateRun.started_at.desc()).offset(keep))).scalars().all()
+        if old:
+            await session.execute(delete(UpdateRunStep).where(UpdateRunStep.run_id.in_(old)))
+            await session.execute(delete(UpdateRun).where(UpdateRun.id.in_(old)))
+            await session.commit()
+        return len(old)
+    except Exception:
+        logger.exception("Sprzatanie starych przebiegow aktualizacji nie powiodlo sie")
+        await session.rollback()
+        return 0

@@ -1221,6 +1221,12 @@ code {
 
 .runlog table { font-size: 0.85rem; margin-top: 0.6rem; }
 .runlog th, .runlog td { padding: 0.45rem 0.7rem; }
+.runlog-fold { margin-top: 0.6rem; }
+.runlog-fold > summary { cursor: pointer; color: var(--text-dim); font-size: 0.82rem; width: fit-content; }
+.runlog-fold > summary:hover { color: var(--c2); }
+.runlog-history { margin: -0.4rem 0 1.2rem; }
+.runlog-past { margin: 0.6rem 0 0; padding: 0.7rem 1rem; background: transparent; }
+.runlog-past .runlog-head strong { font-size: 0.86rem; }
 
 /* ---- Responsywność ---- */
 

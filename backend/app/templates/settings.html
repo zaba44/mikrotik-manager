@@ -32,6 +32,12 @@
         <input type="number" id="backup_retention_count" name="backup_retention_count" min="1"
                value="{{ backup_settings.backup_retention_count }}" required>
 
+        <label for="update_runs_keep">Historia aktualizacji — ile przebiegów zachować (per lokalizacja, per urządzenie)</label>
+        <input type="number" id="update_runs_keep" name="update_runs_keep" min="1"
+               value="{{ backup_settings.update_runs_keep }}" required>
+        <p class="hint">Starsze przebiegi znikają automatycznie po zakończeniu kolejnej aktualizacji.
+        Wcześniejsze przebiegi lokalizacji są na jej stronie pod ostatnią aktualizacją.</p>
+
         <p class="form-foot"><button type="submit">Zapisz</button></p>
     </form>
 </section>

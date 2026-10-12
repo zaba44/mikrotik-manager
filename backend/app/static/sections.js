@@ -98,3 +98,29 @@
         if (host) guard(host);
     });
 })();
+
+/* Rozwiniete <details data-keep="..."> przezywaja odswiezenie fragmentu przez htmx.
+ * Log aktualizacji lokalizacji odswieza sie co 2 s (outerHTML) — bez tego rozwiniete
+ * „wszystkie kroki" zamykaly sie przy kazdym odpytaniu. Pamietamy tylko otwarte: zamkniete
+ * przez uzytkownika zostaja zamkniete. */
+(function () {
+    var saved = {};
+    document.addEventListener("htmx:beforeSwap", function (e) {
+        var t = e.detail && e.detail.target;
+        if (!t || !t.id) return;
+        saved[t.id] = Array.prototype.filter.call(t.querySelectorAll("details[data-keep]"), function (d) {
+            return d.open;
+        }).map(function (d) { return d.dataset.keep; });
+    });
+    document.addEventListener("htmx:afterSettle", function (e) {
+        var t = e.detail && e.detail.target;
+        var id = t && t.id;
+        if (!id || !saved[id]) return;
+        var root = document.getElementById(id);
+        if (root) saved[id].forEach(function (k) {
+            var d = root.querySelector('details[data-keep="' + k + '"]');
+            if (d) d.open = true;
+        });
+        delete saved[id];
+    });
+})();
