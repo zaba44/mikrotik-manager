@@ -351,8 +351,13 @@ def on_cap(iface: dict) -> bool:
     """Interfejs WiFi capa widziany na routerze z CAPsMAN-em, gdy ruch obsluguje sam cap
     (lokalne przekazywanie). Tu ma zawsze running=false i zerowe liczniki, choc cap dziala —
     RouterOS opisuje to w polu `about` („operated by CAP 192.168.55.6, traffic processing
-    on CAP"). Bez tego portal pokazywal takie interfejsy jako „down"."""
-    return "traffic processing on cap" in (iface.get("about") or "").lower()
+    on CAP"). Bez tego portal pokazywal takie interfejsy jako „down".
+    REST podaje to pole jako `.about` (z kropka — jak `.id`), terminal jako `about`."""
+    return "traffic processing on cap" in (_about(iface) or "").lower()
+
+
+def _about(iface: dict) -> str | None:
+    return iface.get(".about") or iface.get("about")
 
 
 async def get_device_health(device: Device, with_interfaces: bool = True) -> dict:
@@ -406,7 +411,7 @@ async def _get_device_health_once(device: Device, with_interfaces: bool = True) 
                             "running": i.get("running") == "true",
                             "disabled": i.get("disabled") == "true",
                             "on_cap": on_cap(i),
-                            "about": i.get("about"),
+                            "about": _about(i),
                             "mtu": i.get("actual-mtu") or i.get("mtu"),
                             "rate": eth_rate.get(name),
                             "rx_byte": _to_int(i.get("rx-byte")),
