@@ -137,7 +137,7 @@
                 {% endfor %}
                 {% for device in admin_devices %}
                 <tr>
-                    <td><a href="/devices/{{ device.id }}">{{ device.name }}</a></td>
+                    <td><a href="/devices/{{ device.id }}">{{ device_labels[device.id] }}</a></td>
                     <td><span class="pill pill-warn" title="Urządzenie zarejestrowane w portalu z adresem z bloku administracyjnego">urządzenie</span></td>
                     <td><span class="chip">{{ device.wg_ip }}</span></td>
                     <td>{% include "_status_badge.html" %}</td>

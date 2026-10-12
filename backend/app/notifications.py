@@ -252,9 +252,10 @@ async def override_summary(session) -> dict:
         if not _override_applies(override):
             continue  # wygasłe wyciszenie traktujemy jak brak
         if override.scope_type == "device":
+            from app.queries import device_label  # queries importuje modele — bez petli na starcie
             obj = await session.get(Device, override.scope_id)
             name, affected, url = (
-                (obj.name, 1, f"/devices/{obj.id}") if obj else ("(usunięte)", 0, None)
+                (await device_label(session, obj), 1, f"/devices/{obj.id}") if obj else ("(usunięte)", 0, None)
             )
         else:
             obj = await session.get(Location, override.scope_id)

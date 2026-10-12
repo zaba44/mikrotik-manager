@@ -4,7 +4,23 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import AdminPeer, Backup, Location, PingTarget, UpdateRun, UpdateRunStep
+from app.models import AdminPeer, Backup, Device, Location, PingTarget, UpdateRun, UpdateRunStep
+
+
+def label(name: str, location_name: str | None) -> str:
+    """„BUDEX / SWITCH POE 24P" — nazwa jest unikalna tylko w lokalizacji, wiec tam, gdzie
+    lokalizacji nie widac (e-mail, raport, nazwa pliku), podajemy ja razem z nazwa."""
+    return f"{location_name} / {name}" if location_name else name
+
+
+def file_label(text: str) -> str:
+    """Etykieta do nazwy pliku: „BUDEX-SWITCH POE 24P" (bez ukosnika)."""
+    return text.replace(" / ", "-")
+
+
+async def device_label(session: AsyncSession, device: Device) -> str:
+    location = await session.get(Location, device.location_id) if device.location_id else None
+    return label(device.name, location.name if location else None)
 
 
 async def list_locations(session: AsyncSession) -> list[Location]:

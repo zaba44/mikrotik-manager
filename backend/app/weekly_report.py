@@ -17,7 +17,8 @@ from sqlalchemy import func, select
 
 from app.database import async_session
 from app.mailer import send_mail
-from app.models import Backup, Device, DeviceLogEntry, Notification
+from app.models import Backup, Device, DeviceLogEntry, Location, Notification
+from app.queries import label
 from app.notifications import override_summary
 from app.settings_store import get_setting, set_setting
 from app.timefmt import dt, utcnow
@@ -59,16 +60,19 @@ async def build_weekly_report(session) -> str:
     lines += ["== Flota ==", f"  Urządzeń: {total}, niedostępnych teraz: {offline}", ""]
 
     # --- Kopie zapasowe: cichy zabójca, potrafią nie działać miesiącami ---
+    # Grupowanie po urzadzeniu, nie po nazwie: nazwa jest unikalna tylko w lokalizacji, wiec
+    # dwa „SWITCH POE 24P" zlewaly sie w jeden wiersz.
     failed = (await session.execute(
-        select(Device.name, func.count(Backup.id))
+        select(Device.name, Location.name, func.count(Backup.id))
         .join(Backup, Backup.device_id == Device.id)
+        .outerjoin(Location, Location.id == Device.location_id)
         .where(Backup.status != "success", Backup.created_at >= week)
-        .group_by(Device.name)
+        .group_by(Device.id, Device.name, Location.name)
     )).all()
     lines.append("== Kopie zapasowe (7 dni) ==")
     if failed:
-        for name, count in failed:
-            lines.append(f"  NIEUDANE: {name} — {count}")
+        for name, location, count in failed:
+            lines.append(f"  NIEUDANE: {label(name, location)} — {count}")
     else:
         lines.append("  Bez błędów.")
     lines.append("")
@@ -90,16 +94,18 @@ async def build_weekly_report(session) -> str:
         )
     )).scalar_one()
     top = (await session.execute(
-        select(Device.name, func.count(DeviceLogEntry.id).label("c"))
+        select(Device.name, Location.name, func.count(DeviceLogEntry.id).label("c"))
         .join(DeviceLogEntry, DeviceLogEntry.device_id == Device.id)
+        .outerjoin(Location, Location.id == Device.location_id)
         .where(DeviceLogEntry.received_at >= week,
                DeviceLogEntry.level.in_(("error", "critical", "warning")))
-        .group_by(Device.name).order_by(func.count(DeviceLogEntry.id).desc()).limit(3)
+        .group_by(Device.id, Device.name, Location.name)
+        .order_by(func.count(DeviceLogEntry.id).desc()).limit(3)
     )).all()
     lines.append("== Zdarzenia z urządzeń (7 dni) ==")
     lines.append(f"  Błędów i ostrzeżeń: {events}")
-    for name, count in top:
-        lines.append(f"    {name}: {count}")
+    for name, location, count in top:
+        lines.append(f"    {label(name, location)}: {count}")
     lines.append("")
 
     # --- Same powiadomienia: liczba wyciszonych jest DIAGNOSTYCZNA ---

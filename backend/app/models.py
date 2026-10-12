@@ -23,9 +23,13 @@ class Location(Base):
 
 class Device(Base):
     __tablename__ = "devices"
+    # Nazwa unikalna W LOKALIZACJI („SWITCH POE 24P" w kazdej z nich), a wsrod urzadzen bez
+    # lokalizacji — miedzy soba (NULLS NOT DISTINCT, Postgres 15+). Migracja 0018.
+    __table_args__ = (UniqueConstraint("location_id", "name", name="uq_devices_location_name",
+                                       postgresql_nulls_not_distinct=True),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(unique=True)
+    name: Mapped[str]
     location_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("locations.id"))
 
     wg_public_key: Mapped[str] = mapped_column(unique=True)

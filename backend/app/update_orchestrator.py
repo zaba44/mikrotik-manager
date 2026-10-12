@@ -9,6 +9,7 @@ from app.config import settings
 from app.database import async_session
 from app.notifications import notify
 from app.models import Device, UpdateRun, UpdateRunStep
+from app.queries import device_label
 from app.settings_store import get_setting
 from app.routeros_client import (
     check_for_updates,
@@ -306,11 +307,12 @@ async def run_device_update(device_id: uuid.UUID, mode: str) -> None:
         await purge_old_runs(session, device_id=device.id)
 
         if run.status == "failed":
+            who = await device_label(session, device)
             await notify(
                 session, event_key="update.failed", device_id=device.id,
                 dedup_key=f"update.failed:{device.id}",
-                subject=f"[MTM] Nieudana aktualizacja: {device.name}",
-                body=(f"Aktualizacja {device.name} zakończyła się niepowodzeniem.\n\n"
+                subject=f"[MTM] Nieudana aktualizacja: {who}",
+                body=(f"Aktualizacja {who} zakończyła się niepowodzeniem.\n\n"
                       f"Tryb: {mode}\nSzczegóły: {run.error_message or 'brak'}"),
             )
 

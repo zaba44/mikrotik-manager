@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.timefmt import dt
 from app.database import get_session
 from app.filenames import ascii_part
-from app.models import Backup, Device
+from app.models import Backup, Device, Location
 from app.security import decrypt, decrypt_bytes
 
 router = APIRouter(prefix="/backups")
@@ -35,6 +35,9 @@ async def download_backup(backup_id: str, session: AsyncSession = Depends(get_se
 
     device = await session.get(Device, backup.device_id)
     device_name = _safe_filename_part(device.name if device else "urzadzenie")
+    location = await session.get(Location, device.location_id) if device and device.location_id else None
+    if location:  # nazwa urzadzenia jest unikalna tylko w lokalizacji — w pliku obie
+        device_name = f"{_safe_filename_part(location.name)}-{device_name}"
     timestamp = dt(backup.created_at, "%Y%m%d-%H%M%S")  # czas lokalny panelu, jak w tabeli kopii
 
     if backup.backup_type == "wg-snapshot":

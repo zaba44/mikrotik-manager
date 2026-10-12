@@ -26,6 +26,7 @@ from app.ros_text import ros_ascii
 from app.auth import require_admin
 from app.database import get_session
 from app.filenames import content_disposition
+from app.queries import device_label, file_label
 from app.routers.routerwg import _NO_STORE, _device, _view
 from app.routerwg import client as wg_client
 from app.routerwg import qr, snapshot, writes
@@ -302,7 +303,8 @@ async def configs_zip(request: Request, device_id: str, iface: str, ids: str,
             name = _zip_name(peer.display_name, used)
             z.writestr(f"{name}.conf", text)
             z.writestr(f"{name}.png", qr.png(text))
-    headers = {"Content-Disposition": content_disposition(f"{device.name}-{iface}.zip"), **_NO_STORE}
+    who = file_label(await device_label(session, device))
+    headers = {"Content-Disposition": content_disposition(f"{who}-{iface}.zip"), **_NO_STORE}
     return Response(content=buf.getvalue(), media_type="application/zip", headers=headers)
 
 

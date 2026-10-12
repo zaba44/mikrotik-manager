@@ -10,6 +10,7 @@ from app.backup_transfer import SFTP_USERNAME, cleanup_incoming, wait_for_upload
 from app.config import settings
 from app.database import async_session
 from app.models import Backup, Device
+from app.queries import device_label
 from app.notifications import notify
 from app.routeros_client import (
     cleanup_router_backup_file,
@@ -144,11 +145,12 @@ async def backup_device(device_id: uuid.UUID) -> None:
         failed = [b for b in (export_backup, binary_backup) if b.status != "success"]
         if failed:
             details = "\n".join(f"  {b.backup_type}: {b.error_message}" for b in failed)
+            who = await device_label(session, device)
             await notify(
                 session, event_key="backup.failed", device_id=device.id,
                 dedup_key=f"backup.failed:{device.id}",
-                subject=f"[MTM] Nieudana kopia: {device.name}",
-                body=f"Kopia zapasowa {device.name} nie powiodła się.\n\n{details}",
+                subject=f"[MTM] Nieudana kopia: {who}",
+                body=f"Kopia zapasowa {who} nie powiodła się.\n\n{details}",
             )
 
     await enforce_retention(device_id)

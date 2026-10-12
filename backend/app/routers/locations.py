@@ -273,6 +273,17 @@ async def delete_location(location_id: str, session: AsyncSession = Depends(get_
             f"Do tej lokalizacji są przypisani operatorzy: {', '.join(operators)}. "
             "Najpierw przypisz ich gdzie indziej (Ustawienia → Użytkownicy)."), status_code=303)
 
+    # Urzadzenia trafia do „bez lokalizacji", a tam nazwa tez musi byc unikalna (0018) —
+    # „SWITCH POE 24P" stad zderzylby sie z takim samym juz nieprzypisanym.
+    names = select(Device.name).where(Device.location_id == location.id)
+    clash = (await session.execute(
+        select(Device.name).where(Device.location_id.is_(None), Device.name.in_(names)))).scalars().all()
+    if clash:
+        return RedirectResponse(url=f"/locations/{location_id}?err=" + quote(
+            f"Wśród urządzeń bez lokalizacji są już: {', '.join(sorted(clash))}. Po usunięciu "
+            "lokalizacji nazwy by się powtórzyły — najpierw przenieś albo przemianuj te urządzenia."),
+            status_code=303)
+
     # Urządzenia zostają, tylko tracą przypisanie do tej lokalizacji. Historia aktualizacji
     # tez zostaje — przebiegi traca tylko odnosnik do usuwanej lokalizacji. Wczesniej
     # klucz obcy z update_runs blokowal usuniecie kazdej lokalizacji, ktora miala za soba

@@ -20,11 +20,12 @@ from app.database import async_session, get_session
 from app import admin_block, local_address
 from app.log_report import build_report, content_disposition
 from app.log_store import purge
-from app.models import (Backup, Device, DeviceLogEntry, NotificationOverride, PingTarget,
+from app.models import (Backup, Device, DeviceLogEntry, Location, NotificationOverride, PingTarget,
                         PoeLockedPort, UpdateRun, UpdateRunStep)
 from app.notifications import scope_view
 from app.notify_forms import apply_scope_form as _apply_scope_form
-from app.queries import latest_device_run, list_device_backups, list_locations, list_ping_targets
+from app.queries import (device_label, file_label, latest_device_run, list_device_backups, list_locations,
+                         list_ping_targets)
 from app.routeros_client import (
     check_for_updates,
     configure_syslog,
@@ -172,6 +173,12 @@ def build_removal_script() -> str:
 """
 
 
+async def _name_taken_where(session: AsyncSession, location_id: str | None) -> str:
+    """Gdzie koliduje nazwa — jest unikalna w lokalizacji (i osobno wsrod urzadzen bez niej)."""
+    location = await session.get(Location, _parse_uuid(location_id)) if location_id else None
+    return f"w lokalizacji {location.name}" if location else "wśród urządzeń bez lokalizacji"
+
+
 def script_for_device(device: Device) -> str:
     return build_routeros_script(
         device_name=device.name,
@@ -250,7 +257,8 @@ async def create_device(
                 "locations": locations,
                 "nav_locations": locations,
                 "selected_location_id": location_id,
-                "error": f'Nie udało się zarejestrować "{name.strip()}" — nazwa jest już zajęta '
+                "error": f'Nie udało się zarejestrować "{name.strip()}" — '
+                f"{await _name_taken_where(session, location_id)} jest już urządzenie o tej nazwie "
                 "(albo wystąpił rzadki konflikt przydziału IP). Spróbuj ponownie.",
                 "prefill_name": name,
                 "prefill_notes": notes,
@@ -355,13 +363,14 @@ async def device_log_report(
     if device is None:
         raise HTTPException(status_code=404, detail="Nie znaleziono urządzenia")
     require_location(request, device.location_id)
+    who = await device_label(session, device)
     await session.close()  # odczyt bufora bywa wolny — nie trzymaj połączenia DB
 
-    text = await build_report([device], scope_name=device.name)
+    text = await build_report([device], scope_name=who)
     return Response(
         content=text.encode("utf-8"),
         media_type="text/plain; charset=utf-8",
-        headers={"Content-Disposition": content_disposition(device.name)},
+        headers={"Content-Disposition": content_disposition(file_label(who))},
     )
 
 
@@ -786,7 +795,8 @@ async def edit_device(
                 "removal_script": build_removal_script(),
                 "run": run,
                 "backups": backups,
-                "error": f'Nazwa "{name.strip()}" jest już zajęta przez inne urządzenie.',
+                "error": f'Nie zapisano zmian — {await _name_taken_where(session, location_id)} jest już '
+                         f'urządzenie o nazwie "{name.strip()}".',
             },
             status_code=409,
         )

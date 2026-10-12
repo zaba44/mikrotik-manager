@@ -13,6 +13,7 @@ from app.routerwg import snapshot as wg_snapshot
 from app.config import settings
 from app.database import async_session
 from app.models import AdminPeer, Device
+from app.queries import device_label
 from app.notifications import notify
 from app.portal_backup import resume_pending_restore
 from app.weekly_report import weekly_report_tick
@@ -122,17 +123,18 @@ async def poll_devices() -> None:
     # Powiadomienia po zamknięciu sesji pollingu — wysyłka nie może opóźniać cyklu.
     for device, online, error in transitions:
         async with async_session() as session:
+            who = await device_label(session, device)
             if online:
                 await notify(
                     session, event_key="device.online", device_id=device.id,
-                    subject=f"[MTM] {device.name} znów odpowiada",
-                    body=f"Urządzenie {device.name} ({device.wg_ip}) ponownie odpowiada przez API.",
+                    subject=f"[MTM] {who} znów odpowiada",
+                    body=f"Urządzenie {who} ({device.wg_ip}) ponownie odpowiada przez API.",
                 )
             else:
                 await notify(
                     session, event_key="device.offline", device_id=device.id,
-                    subject=f"[MTM] {device.name} nie odpowiada",
-                    body=(f"Urządzenie {device.name} ({device.wg_ip}) przestało odpowiadać "
+                    subject=f"[MTM] {who} nie odpowiada",
+                    body=(f"Urządzenie {who} ({device.wg_ip}) przestało odpowiadać "
                           f"przez API.\n\nSzczegóły: {error or 'brak'}"),
                 )
 

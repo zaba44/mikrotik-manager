@@ -28,6 +28,7 @@ from app.config import settings
 from app.database import async_session
 from app.log_store import enforce_device_cap
 from app.models import Device, DeviceLogEntry
+from app.queries import device_label
 from app.notifications import notify
 from app.settings_store import get_int_setting, get_setting
 
@@ -173,13 +174,15 @@ class SyslogReceiver:
             # Zgłoszenia po zapisie — dedup w notify() i tak scala powtórki,
             # więc przy zalewie nie zamieni się to w lawinę maili.
             for entry in alerts[:20]:
+                device = await session.get(Device, entry.device_id)
+                who = await device_label(session, device) if device else "(usunięte urządzenie)"
                 await notify(
                     session,
                     event_key=f"syslog.{'warning' if entry.level == 'warning' else 'error'}",
                     device_id=entry.device_id,
                     dedup_key=f"syslog:{entry.device_id}:{entry.topics}",
-                    subject=f"[MTM] {entry.level}: {entry.topics}",
-                    body=(f"Zdarzenie z urządzenia.\n\nPoziom: {entry.level}\n"
+                    subject=f"[MTM] {who} — {entry.level}: {entry.topics}",
+                    body=(f"Zdarzenie z urządzenia {who}.\n\nPoziom: {entry.level}\n"
                           f"Topiki: {entry.topics}\n\n{entry.message}"),
                 )
             # Limit egzekwujemy dopiero po _TRIM_EVERY wpisach z danego

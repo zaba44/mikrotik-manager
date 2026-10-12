@@ -34,7 +34,7 @@ from app.notifications import (
     override_summary,
     recent_notifications,
 )
-from app.queries import list_admin_peers, list_locations
+from app.queries import device_label, list_admin_peers, list_locations
 from app.routeros_client import disable_syslog
 from app.security import AdminBlockFull
 from app.settings_store import get_backup_settings, get_setting, get_syslog_settings, set_setting
@@ -492,6 +492,7 @@ async def _render_admin_peers(request, session, *, new_peer=None, new_config=Non
             "block_used": len([p for p in peers if ipaddress.ip_address(p.wg_ip) in block]) + len(admin_devices),
             "block_usable": admin_block.usable(wg.subnet, prefix),
             "admin_devices": admin_devices,
+            "device_labels": {d.id: await device_label(session, d) for d in admin_devices},
             # peery sprzed bloku (albo po recznej zmianie) — Winbox z nich nie zadziala
             "outside_peers": [p for p in peers if ipaddress.ip_address(p.wg_ip) not in block],
             "winbox_script": admin_block.winbox_script(str(block)),
