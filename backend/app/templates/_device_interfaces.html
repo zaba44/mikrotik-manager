@@ -7,9 +7,9 @@
             {% for i in h.interfaces %}
             <tr>
                 <td>{{ i.name }}</td>
-                <td>{% if i.comment %}{{ i.comment }}{% else %}<span class="empty">—</span>{% endif %}</td>
+                <td>{% if i.comment %}{{ i.comment }}{% elif i.about %}<span class="empty">{{ i.about }}</span>{% else %}<span class="empty">—</span>{% endif %}</td>
                 <td class="empty">{{ i.type }}</td>
-                <td>{% if i.disabled %}<span class="pill pill-idle">wyłączony</span>{% elif i.running %}<span class="pill pill-ok"><span class="dot"></span>up</span>{% else %}<span class="pill pill-bad">down</span>{% endif %}</td>
+                <td>{% if i.disabled %}<span class="pill pill-idle">wyłączony</span>{% elif i.running %}<span class="pill pill-ok"><span class="dot"></span>up</span>{% elif i.on_cap %}<span class="pill pill-info" title="Ruch obsługuje cap — stan i liczniki są na samym capie">na CAP</span>{% else %}<span class="pill pill-bad">down</span>{% endif %}</td>
                 <td>{% if i.rate %}<span class="pill pill-info">{{ i.rate }}</span>{% else %}<span class="empty">—</span>{% endif %}</td>
                 <td>{{ i.mtu }}</td>
                 <td>{{ i.rx_byte | humanbytes }}</td>
