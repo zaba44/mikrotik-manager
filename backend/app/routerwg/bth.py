@@ -3,10 +3,10 @@
 Empiria z Krok 0 na `Router` (hAP ax², arm64, RouterOS 7.24.2) — trzy cykle wlacz/wylacz,
 DDNS za kazdym razem bez zmian:
 
-* Menu uzytkownikow to **`/ip/cloud/back-to-home-user`** — w liczbie pojedynczej.
-  `back-to-home-users` (tak mowila specyfikacja i implementacja referencyjna) w RouterOS
-  nie istnieje: `print` daje „no such command prefix", a GET zwraca mylace HTTP 500
-  zamiast 404 — latwo wziac to za awarie routera.
+* Menu uzytkownikow to **`/ip/cloud/back-to-home-user`** — w liczbie pojedynczej — ale tylko
+  od 7.18. Do 7.16.x nazywalo sie `back-to-home-users` (sprawdzone na flocie 2026-10-13), a
+  nieznana nazwa zwraca mylace HTTP 500 zamiast 404 — latwo wziac to za awarie routera.
+  Dlatego `_users()` probuje obu.
 * `POST .../add` zwraca `{"ret": "*1"}`; klucze uzytkownika router generuje z malym
   opoznieniem — odczyt tuz po dodaniu potrafi oddac puste `private-key`/`public-key`.
 * `show-client-config` z parametrem `.id` (NIE `numbers`) zwraca `[{"conf": ..., "qr": ...}]`,
@@ -31,7 +31,10 @@ from app.routeros_client import _auth, _base_url, _device_sem, _json
 from app.routerwg.client import RouterError, _get
 from app.routerwg.model import format_ago, peer_from_row, version_tuple
 
-USERS = "/rest/ip/cloud/back-to-home-user"
+# Menu uzytkownikow zmienilo nazwe: do 7.16.x `back-to-home-users`, od 7.18 `back-to-home-user`
+# (flota produkcyjna 2026-10-13: 7.15/7.16.2 tylko liczba mnoga, 7.18.2-7.24.5 tylko pojedyncza;
+# 7.17 nie bylo pod reka). Nieznana nazwa daje HTTP 500, nie 404 — stad proba po kolei.
+USERS_PATHS = ("/rest/ip/cloud/back-to-home-user", "/rest/ip/cloud/back-to-home-users")
 SUPPORTED_ARCH = ("arm", "arm64", "tile")
 
 # Popularne podsieci domowe — klient w takiej sieci ma ta sama podsiec lokalnie, wiec
@@ -41,6 +44,17 @@ COMMON_SUBNETS = ("192.168.0.0/24", "192.168.1.0/24", "192.168.88.0/24")
 # Pola /ip/cloud, ktore NIGDY nie wychodza poza ten modul.
 _CLOUD_SECRET = ("vpn-private-key", "vpn-peer-private-key", "vpn-wireguard-client-config",
                  "vpn-wireguard-client-config-qrcode")
+
+
+async def _users(client: httpx.AsyncClient, base: str) -> tuple[str, list]:
+    """(adres menu uzytkownikow na tym routerze, lista uzytkownikow)."""
+    for path in USERS_PATHS:
+        resp = await client.get(f"{base}{path}")
+        if resp.status_code == 200:
+            rows = _json(resp)
+            return f"{base}{path}", [u for u in (rows if isinstance(rows, list) else []) if isinstance(u, dict)]
+    raise RouterError("Router nie udostępnia listy użytkowników Back To Home "
+                      "(ani back-to-home-user, ani back-to-home-users).")
 
 
 def _sanitize_cloud(cloud: dict) -> dict:
@@ -104,8 +118,7 @@ async def load(device: Device) -> dict:
                 users: list[dict] = []
                 conn: dict[str, dict] = {}
                 if enabled:
-                    users = [_sanitize_user(u) for u in (await _get(client, f"{base}{USERS}") or [])
-                             if isinstance(u, dict)]
+                    users = [_sanitize_user(u) for u in (await _users(client, base))[1]]
                     # Stan POLACZENIA bierzemy z peerow interfejsu back-to-home-vpn, dopasowanych
                     # po kluczu publicznym. Pole `active` uzytkownika tego nie mowi — jest `true`
                     # od razu po utworzeniu, bez zadnego polaczenia (sprawdzone na sprzecie),
@@ -169,12 +182,12 @@ async def add_user(device: Device, name: str, allow_lan: bool, expires: str) -> 
         body["expires"] = expires
     async with _device_sem(device):
         async with _client(device) as client:
-            base = _base_url(device)
-            resp = await _check(await client.post(f"{base}{USERS}/add", json=body), "Dodanie użytkownika BTH")
+            url, _rows = await _users(client, _base_url(device))
+            resp = await _check(await client.post(f"{url}/add", json=body), "Dodanie użytkownika BTH")
             new_id = (_json(resp) or {}).get("ret")
             # Klucze pojawiaja sie z opoznieniem — czekamy chwile, zanim uznamy, ze ich nie ma.
             for _ in range(10):
-                rows = await _get(client, f"{base}{USERS}") or []
+                rows = await _get(client, url) or []
                 row = next((u for u in rows if u.get(".id") == new_id), None)
                 if row and row.get("public-key"):
                     return _sanitize_user(row)
@@ -185,7 +198,8 @@ async def add_user(device: Device, name: str, allow_lan: bool, expires: str) -> 
 async def set_user_comment(device: Device, user_id: str, comment: str) -> None:
     async with _device_sem(device):
         async with _client(device) as client:
-            await _check(await client.patch(f"{_base_url(device)}{USERS}/{user_id}",
+            url, _rows = await _users(client, _base_url(device))
+            await _check(await client.patch(f"{url}/{user_id}",
                                             json={"comment": comment}),
                          "Zmiana komentarza użytkownika BTH")
 
@@ -193,8 +207,9 @@ async def set_user_comment(device: Device, user_id: str, comment: str) -> None:
 async def user_config(device: Device, user_id: str) -> str:
     async with _device_sem(device):
         async with _client(device) as client:
+            url, _rows = await _users(client, _base_url(device))
             resp = await _check(
-                await client.post(f"{_base_url(device)}{USERS}/show-client-config", json={".id": user_id}),
+                await client.post(f"{url}/show-client-config", json={".id": user_id}),
                 "Odczyt configu BTH")
     data = _json(resp)
     rows = data if isinstance(data, list) else [data]

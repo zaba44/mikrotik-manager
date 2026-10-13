@@ -87,3 +87,32 @@ def test_lan_subnets_excludes_wg_public_disabled():
         {"address": "10.9.9.1/24", "interface": "ether5", "disabled": "true"},
     ], {"WG_BIURO", "back-to-home-vpn"})
     assert subs == ["192.168.88.0/24", "192.168.18.0/24"]
+
+
+def test_users_menu_name_by_router_version():
+    """Do 7.16.x menu nazywa sie `back-to-home-users`, od 7.18 `back-to-home-user`; nieznana
+    nazwa daje HTTP 500 (flota 2026-10-13). Portal probuje obu zamiast zakladac jedna."""
+    import asyncio
+    import httpx
+    import pytest
+    from app.routerwg import bth
+    from app.routerwg.client import RouterError
+
+    def client(working):
+        def handler(request):
+            path = request.url.path
+            if path.endswith("/" + working):
+                return httpx.Response(200, json=[{".id": "*1", "name": "jan", "private-key": "SEKRET"}])
+            return httpx.Response(500, json={"error": 500, "message": "Internal Server Error"})
+        return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    async def run(working):
+        async with client(working) as c:
+            return await bth._users(c, "https://10.77.0.7")
+
+    url, rows = asyncio.run(run("back-to-home-users"))          # 7.15 / 7.16
+    assert url == "https://10.77.0.7/rest/ip/cloud/back-to-home-users" and rows[0]["name"] == "jan"
+    url, _ = asyncio.run(run("back-to-home-user"))              # 7.18+
+    assert url.endswith("/back-to-home-user")
+    with pytest.raises(RouterError):                            # mipsbe — brak BTH
+        asyncio.run(run("nic"))
