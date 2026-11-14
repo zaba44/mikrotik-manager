@@ -31,6 +31,7 @@
                         <span class="actions-row">
                             {% if backup.status == "success" %}
                             <a href="/backups/{{ backup.id }}/download">pobierz</a>
+                            {% if backup.backup_type == "export" %}<a href="/backups/{{ backup.id }}/diff" title="Co się zmieniło względem poprzedniej kopii">zmiany</a>{% endif %}
                             {% endif %}
                             <form method="post" action="/backups/{{ backup.id }}/delete" class="bare"
                                   data-confirm="Usunąć tę kopię?">

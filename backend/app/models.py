@@ -60,6 +60,9 @@ class Device(Base):
     current_firmware: Mapped[str | None]
     available_firmware: Mapped[str | None]
     routeros_winbox_port: Mapped[str | None]
+    # Koniec waznosci certyfikatu www-ssl (mtm-cert), czytany przy sprawdzaniu aktualizacji.
+    # Wygasniecie nie zrywa API (portal nie weryfikuje certyfikatu routera), ale warto wiedziec.
+    cert_expires_at: Mapped[datetime.datetime | None]
 
     # Syslog: podpięcie urządzenia włącza warning/error/critical. `info` osobno, bo
     # generuje setki wpisów na dobę — trzymamy je na czas diagnostyki, nie na stałe.

@@ -29,6 +29,16 @@ Panel jest dostępny przez tunel; czy także z sieci hosta — decydujesz sam
   przeciw zalaniu skrzynki.
 - **Kopia całego portalu** i odtworzenie na czystej maszynie — flota wraca sama,
   bez dotykania routerów.
+- **Flota**: jeden ekran ze stanem wszystkich urządzeń i listą „wymaga uwagi” (stary
+  RouterOS, tunel bez API, długo offline, nieudane kopie, wygasający certyfikat) oraz
+  akcje na wielu urządzeniach naraz, także z różnych lokalizacji.
+- **Akcje przez API** zamiast wklejania w terminalu: reguła Winbox dla administratorów,
+  uporządkowanie i wyczyszczenie logu routera, odnowienie certyfikatu API — na jednym
+  urządzeniu, całej lokalizacji albo zaznaczonych we Flocie.
+- **Porównanie kopii**: co zmieniło się w konfiguracji routera między dwoma eksportami
+  (hasła i klucze ukryte).
+- **Klienci WiFi**: kto jest podłączony, do którego AP, z jakim sygnałem — na routerze
+  z CAPsMAN-em klienci wszystkich capów.
 
 ## Uruchomienie
 
@@ -79,7 +89,7 @@ albo wgrać własny.
 ustaw w `.env` konkretną wersję:
 
 ```
-MTM_VERSION=0.7.14
+MTM_VERSION=0.8.0
 ```
 
 Aktualne wydania: zakładka *Releases* / tagi `v*` w repozytorium (w `.env` bez litery `v`).
@@ -104,7 +114,7 @@ proces); jej nowy obraz wchodzi przy najbliższym ręcznym `docker compose up -d
 **Ręcznie** (zawsze działa, także bez usługi `updater`):
 
 ```bash
-sed -i 's/^MTM_VERSION=.*/MTM_VERSION=0.7.14/' .env && docker compose pull && docker compose up -d
+sed -i 's/^MTM_VERSION=.*/MTM_VERSION=0.8.0/' .env && docker compose pull && docker compose up -d
 ```
 
 Migracje bazy wykonują się automatycznie przy starcie i działają tylko w przód — powrót do
@@ -206,14 +216,24 @@ certyfikat na ten adres (jest już w podpowiedzi), żeby przeglądarka nie prote
 
 Peery administracyjne dostają adresy z **bloku administracyjnego** — końcowego fragmentu
 podsieci tunelu (domyślnie /27, wielkość zmienisz w tej samej zakładce). W zakładce jest
-skrypt, który wklejasz **raz na każdym routerze**: sam odczytuje port Winboxa, dodaje cały
+skrypt, który portal wykonuje na routerach sam (strona urządzenia, lokalizacji albo **Flota**
+→ „Winbox dla adminów”) — albo wklejasz go ręcznie. Skrypt sam odczytuje port Winboxa, dodaje cały
 blok do listy `mtm-admin` i wstawia regułę wpuszczającą Winbox z bloku, wyłącznie przez
 tunel — tuż przed pierwszą regułą akceptującą port Winboxa, a gdy takiej nie ma, na górę
 listy. Kolejni administratorzy działają od razu, bez zmian na routerach.
 
 Router w biurze administratora dodasz jako urządzenie z zaznaczonym **Urządzenie
 administracyjne** — dostanie adres z bloku (na liście peerów jest oznaczony jako
-„urządzenie”). Zwykłe urządzenia nigdy nie dostają adresów z bloku.
+„urządzenie”). Zwykłe urządzenia nigdy nie dostają adresów z bloku. Istniejące urządzenie
+zmienisz w administracyjne (i z powrotem) w jego edycji — portal sam przenosi adres tunelu
+na działającym routerze.
+
+### Ruch między klientami przez hub
+
+Hub łączy wszystkie tunele. Domyślnie **izoluje peery od siebie**: między nimi przechodzi
+tylko ruch z bloku administracyjnego i odpowiedzi na niego, więc router jednego klienta nie
+sięgnie przez hub do routerów innych. Połączenia portalu z routerami i dostęp do panelu
+przez tunel działają bez zmian. Przełącznik: **Ustawienia → Peery administracyjne**.
 
 ## Rozwój
 
@@ -228,6 +248,18 @@ uruchamia CI przed każdym wydaniem). Scenariusze wymagające działającego por
 routerów: [backend/tests/lab/](backend/tests/lab/README.md). Ustalenia empiryczne z żywego
 sprzętu (zachowanie REST RouterOS, minimalne uprawnienia API) są opisane w komentarzach
 przy kodzie, którego dotyczą.
+
+### Zgodność z wersjami RouterOS
+
+MikroTik zmienia nazwy menu i parametrów między wersjami, a nieznana nazwa w REST zwraca
+HTTP 500. `backend/tests/lab/compat_probe.py` (tylko odczyt) sprawdza na całej flocie, czy
+każdy router ma to, czego portal używa, i wypisuje odstępstwa pogrupowane po wersji:
+
+```bash
+docker exec -i -w /app mtm-backend python - < backend/tests/lab/compat_probe.py
+```
+
+Warto mieć w labie router zostawiony na najstarszej obsługiwanej wersji (7.15).
 
 ## Licencja
 

@@ -28,14 +28,19 @@ async def list_locations(session: AsyncSession) -> list[Location]:
 
 
 async def latest_device_run(session: AsyncSession, device_id: uuid.UUID) -> UpdateRun | None:
+    """Ostatni przebieg aktualizacji urzadzenia; wczesniejsze (ile ich jest, pilnuje
+    `update_runs_keep`) wisza na nim jako `earlier` — dla listy pod ostatnim przebiegiem."""
     result = await session.execute(
         select(UpdateRun)
         .options(selectinload(UpdateRun.steps))
         .where(UpdateRun.device_id == device_id)
         .order_by(UpdateRun.started_at.desc())
-        .limit(1)
     )
-    return result.scalar_one_or_none()
+    runs = list(result.scalars().all())
+    if not runs:
+        return None
+    runs[0].earlier = runs[1:]
+    return runs[0]
 
 
 async def list_ping_targets(session: AsyncSession, device_id: uuid.UUID) -> list[PingTarget]:

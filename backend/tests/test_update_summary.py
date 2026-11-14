@@ -119,3 +119,18 @@ def test_acknowledge_is_operational_write():
     from app.main import _is_operational_write
     assert _is_operational_write("/locations/abc/update-runs/def/acknowledge")
     assert not _is_operational_write("/locations/abc/delete")
+
+
+def test_device_page_lists_earlier_runs():
+    """Strona urzadzenia: pod ostatnim przebiegiem zwinieta lista wczesniejszych."""
+    run = _run(steps=FULL[:3])
+    run.earlier = [_run("failed", FULL[:2], day=3, error="timeout po 600s"), _run(steps=FULL[:3], day=9)]
+    req = types.SimpleNamespace(state=types.SimpleNamespace(user=None))
+    dev = types.SimpleNamespace(id="d", name="ROUTER", routeros_version="7.24.5", available_routeros_version=None,
+                                current_firmware="7.24.5", available_firmware=None)
+    html = templates.get_template("_device_updates.html").render(request=req, device=dev, run=run)
+    assert "wcześniejsze aktualizacje (2)" in html and "timeout po 600s" in html
+    assert html.count("kroki (") == 2
+    run.earlier = []
+    assert "wcześniejsze aktualizacje" not in templates.get_template("_device_updates.html").render(
+        request=req, device=dev, run=run)

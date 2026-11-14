@@ -18,6 +18,7 @@ from app.backup_service import backup_device
 from app.config import settings
 from app.database import async_session, get_session
 from app import admin_block, local_address, readdress
+from app.fleet_actions import LOG_TIDY_LINES
 from app.log_report import build_report, content_disposition
 from app.log_store import purge
 from app.models import (Backup, Device, DeviceLogEntry, Location, NotificationOverride, PingTarget,
@@ -32,6 +33,7 @@ from app.routeros_client import (
     disable_syslog,
     get_device_health,
     get_dhcp_leases,
+    get_wifi_clients,
     get_poe,
     get_lte,
     get_routerboard_info,
@@ -138,6 +140,8 @@ def build_routeros_script(
         "/certificate sign mtm-cert; :local w 0; :while (([/certificate get [find name=mtm-cert] private-key] != true) "
         f"&& ($w < 60)) do={{:delay 1s; :set w ($w + 1)}}; "
         + _service_set(f"{wg.server_ip}/32", "port=443 certificate=mtm-cert disabled=no"),
+        # log routera bez logowan konta API (ok. 110 wpisow na dobe) — zob. fleet_actions
+        *LOG_TIDY_LINES,
         ':put "MTM: gotowe - urzadzenie powinno pojawic sie w portalu w ciagu minuty."',
         "}",
     ]
@@ -576,6 +580,17 @@ async def device_leases_fragment(request: Request, device_id: str, session: Asyn
     await session.close()  # jw. — nie trzymaj połączenia DB przez czas odczytu REST
     result = await get_dhcp_leases(device)
     return templates.TemplateResponse("_device_leases.html", {"request": request, "device": device, "r": result})
+
+
+@router.get("/{device_id}/fragment/wifi-clients")
+async def device_wifi_clients_fragment(request: Request, device_id: str, session: AsyncSession = Depends(get_session)):
+    device = await session.get(Device, _parse_uuid(device_id))
+    if device is None:
+        raise HTTPException(status_code=404, detail="Nie znaleziono urządzenia")
+    require_location(request, device.location_id)
+    await session.close()  # odczyt REST — nie trzymaj połączenia DB
+    result = await get_wifi_clients(device)
+    return templates.TemplateResponse("_device_wifi_clients.html", {"request": request, "device": device, "r": result})
 
 
 @router.get("/{device_id}/fragment/addresses")

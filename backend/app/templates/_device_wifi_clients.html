@@ -1,0 +1,32 @@
+{% if not r.ok %}
+<div class="empty-state" title="{{ r.error }}">Nie udało się pobrać klientów WiFi — urządzenie nieosiągalne przez API.
+    {% if r.error %}<br><span class="hint">{{ r.error }}</span>{% endif %}</div>
+{% elif not r.supported %}
+<div class="empty-state">To urządzenie nie ma WiFi (ani CAPsMAN-a).</div>
+{% elif not r.clients %}
+<div class="empty-state">Żaden klient nie jest teraz podłączony.</div>
+{% else %}
+<p class="hint">Podłączonych: <b>{{ r.clients | length }}</b>. Na routerze z CAPsMAN-em są tu klienci wszystkich capów.
+    Nazwa i adres pochodzą z dzierżaw DHCP tego routera — klient z ręcznie wpisanym adresem ich nie ma.</p>
+<div class="table-wrap table-fit">
+    <table class="sortable">
+        <thead><tr><th data-sort="text">Urządzenie</th><th data-sort="text">Adres</th><th data-sort="text">MAC</th>
+            <th data-sort="text">Interfejs / AP</th><th data-sort="text">SSID</th><th data-sort="number">Sygnał</th>
+            <th data-sort="text">Prędkość ↓ / ↑</th><th data-sort="text">Połączony od</th></tr></thead>
+        <tbody>
+            {% for c in r.clients %}
+            <tr>
+                <td>{% if c.host %}{{ c.host }}{% else %}<span class="empty">—</span>{% endif %}</td>
+                <td>{% if c.address %}<span class="chip">{{ c.address }}</span>{% else %}<span class="empty">—</span>{% endif %}</td>
+                <td>{{ c.mac }}</td>
+                <td>{{ c.interface or "—" }}{% if c.cap %}<br><span class="empty">{{ c.cap }}</span>{% endif %}</td>
+                <td>{{ c.ssid or "—" }}{% if c.band %} <span class="empty">{{ c.band }}</span>{% endif %}</td>
+                <td data-sort-value="{{ c.signal if c.signal is not none else -999 }}">{% if c.signal is none %}<span class="empty">—</span>{% else %}<span class="pill {% if c.signal >= -65 %}pill-ok{% elif c.signal >= -75 %}pill-warn{% else %}pill-bad{% endif %}">{{ c.signal }} dBm</span>{% endif %}</td>
+                <td>{{ c.tx_rate or "—" }} / {{ c.rx_rate or "—" }}</td>
+                <td>{{ c.uptime or "—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}

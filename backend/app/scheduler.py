@@ -22,7 +22,8 @@ from app.log_store import (
     enforce_notification_retention,
     enforce_retention,
 )
-from app.routeros_client import check_for_updates, get_routerboard_info, get_status, lte_present
+from app.fleet_health import parse_cert_date
+from app.routeros_client import check_for_updates, get_cert_expiry, get_routerboard_info, get_status, lte_present
 from app.settings_store import get_int_setting, get_setting, set_setting
 from app.wg_agent_client import get_peers
 
@@ -165,6 +166,10 @@ async def check_updates() -> None:
             has_lte = await lte_present(device)
             if has_lte is not None:
                 device.has_lte = has_lte
+
+            expires = parse_cert_date(await get_cert_expiry(device))
+            if expires is not None:
+                device.cert_expires_at = expires
 
         await session.commit()
         count = len(devices)

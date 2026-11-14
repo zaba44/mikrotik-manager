@@ -99,6 +99,18 @@ async def get_routerboard_info(device: Device) -> dict:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
+async def get_cert_expiry(device: Device) -> str | None:
+    """`invalid-after` certyfikatu mtm-cert albo None (brak certyfikatu / brak odpowiedzi)."""
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=_TIMEOUT, auth=_auth(device)) as client:
+            resp = await client.get(f"{_base_url(device)}/rest/certificate", params={"name": "mtm-cert"})
+            resp.raise_for_status()
+            rows = resp.json()
+            return rows[0].get("invalid-after") if rows else None
+    except Exception:
+        return None
+
+
 async def check_for_updates(device: Device) -> dict:
     """Odpytuje serwery MikroTika o dostępną wersję. Zwraca installed/latest/status."""
     try:
@@ -971,3 +983,77 @@ def lte_firmware_result(data) -> dict:
     row = (done or frames or [{}])[-1]
     return {"installed": row.get("installed"), "latest": row.get("latest"), "status": row.get("status"),
             "pending": not done and bool(frames)}
+
+
+# ---- Klienci WiFi ----
+# Tabela rejestracji siedzi w innym menu zaleznie od sterownika: `wifi` (7.13+, takze CAPsMAN
+# — na menedzerze sa tam klienci WSZYSTKICH capow), `wifiwave2` (starsze 7.x), `wireless`
+# (stary sterownik) i `caps-man` (stary CAPsMAN). Nieistniejace menu daje blad HTTP, wiec
+# pytamy po kolei i sklejamy to, co odpowie.
+_WIFI_TABLES = ("interface/wifi/registration-table", "interface/wifiwave2/registration-table",
+                "interface/wireless/registration-table", "caps-man/registration-table")
+
+
+def _signal(row: dict) -> int | None:
+    """`signal` („-58") albo `signal-strength`/`rx-signal` („-58dBm@6Mbps", „-58")."""
+    raw = str(row.get("signal") or row.get("signal-strength") or row.get("rx-signal") or "")
+    digits = ""
+    for ch in raw:
+        if ch in "-0123456789":
+            digits += ch
+        elif digits:
+            break
+    try:
+        return int(digits)
+    except ValueError:
+        return None
+
+
+def parse_wifi_clients(rows: list, leases: dict, caps: dict) -> list[dict]:
+    """Wiersze tabeli rejestracji -> wspolny ksztalt. `leases`: mac -> (adres, nazwa hosta),
+    `caps`: interfejs -> opis („operated by CAP ...") dla interfejsow capow."""
+    out = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        mac = str(r.get("mac-address") or "").upper()
+        if not mac:
+            continue
+        address, host = leases.get(mac, (None, None))
+        iface = r.get("interface")
+        out.append({
+            "mac": mac, "interface": iface, "ssid": r.get("ssid"), "signal": _signal(r),
+            "uptime": r.get("uptime"), "band": r.get("band"),
+            "tx_rate": r.get("tx-rate"), "rx_rate": r.get("rx-rate"),
+            "address": address or r.get("last-ip"), "host": host or r.get("comment"),
+            "cap": caps.get(iface),
+        })
+    out.sort(key=lambda c: (str(c["interface"] or ""), -(c["signal"] or -999)))
+    return out
+
+
+async def get_wifi_clients(device: Device) -> dict:
+    """{"ok", "clients", "supported"} — `supported` False, gdy router nie ma zadnego menu WiFi."""
+    try:
+        async with _device_sem(device), httpx.AsyncClient(verify=False, timeout=15.0, auth=_auth(device)) as client:
+            base = _base_url(device)
+            rows, supported = [], False
+            for path in _WIFI_TABLES:
+                resp = await client.get(f"{base}/rest/{path}")
+                if resp.status_code == 200 and isinstance(resp.json(), list):
+                    supported = True
+                    rows += resp.json()
+            leases, caps = {}, {}
+            if rows:
+                lease_resp = await client.get(f"{base}/rest/ip/dhcp-server/lease")
+                if lease_resp.status_code == 200:
+                    for l in lease_resp.json():
+                        mac = str(l.get("active-mac-address") or l.get("mac-address") or "").upper()
+                        if mac:
+                            leases[mac] = (l.get("active-address") or l.get("address"), l.get("host-name") or l.get("comment"))
+                iface_resp = await client.get(f"{base}/rest/interface")
+                if iface_resp.status_code == 200:
+                    caps = {i.get("name"): _about(i) for i in iface_resp.json() if on_cap(i)}
+            return {"ok": True, "supported": supported, "clients": parse_wifi_clients(rows, leases, caps)}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}", "clients": [], "supported": True}

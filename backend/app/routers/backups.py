@@ -2,10 +2,14 @@ import os
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import config_diff
+from app.queries import list_locations
+from app.templating import templates
 from app.timefmt import dt
 from app.database import get_session
 from app.filenames import ascii_part
@@ -25,6 +29,32 @@ def _parse_uuid(value: str) -> uuid.UUID:
 def _safe_filename_part(value: str) -> str:
     """Wspolny mechanizm — patrz app/filenames.py (pulapka isalnum() z polskimi znakami)."""
     return ascii_part(value, "urzadzenie")
+
+
+@router.get("/{backup_id}/diff")
+async def diff_backup(request: Request, backup_id: str, other: str = "", session: AsyncSession = Depends(get_session)):
+    """Co sie zmienilo w konfiguracji: ten eksport wzgledem wczesniejszego (domyslnie
+    poprzedniego udanego). Sekrety ukryte — zob. app/config_diff.py."""
+    backup = await session.get(Backup, _parse_uuid(backup_id))
+    if backup is None or backup.status != "success" or backup.backup_type != "export":
+        raise HTTPException(status_code=404, detail="Nie znaleziono eksportu")
+    device = await session.get(Device, backup.device_id)
+    exports = (await session.execute(
+        select(Backup).where(Backup.device_id == backup.device_id, Backup.backup_type == "export",
+                             Backup.status == "success").order_by(Backup.created_at.desc()))).scalars().all()
+    older = [b for b in exports if b.created_at < backup.created_at]
+    base = next((b for b in exports if str(b.id) == other and b.id != backup.id), None) or (older[0] if older else None)
+    rows, added, removed = [], 0, 0
+    current = backup  # kopia, z ktorej strony przyszedl uzytkownik — formularz wyboru zostaje przy niej
+    if base is not None:
+        first, second = sorted((base, backup), key=lambda b: b.created_at)
+        rows = config_diff.diff(decrypt(first.content_text_encrypted), decrypt(second.content_text_encrypted))
+        added, removed = config_diff.stats(rows)
+        base, backup = first, second
+    return templates.TemplateResponse("backup_diff.html", {
+        "request": request, "nav_locations": await list_locations(session), "device": device,
+        "backup": backup, "base": base, "current": current, "exports": exports, "rows": rows, "added": added, "removed": removed,
+    }, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/{backup_id}/download")

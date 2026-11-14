@@ -86,6 +86,19 @@ from app import update_summary as _update_summary  # noqa: E402
 templates.env.globals["run_summary"] = _update_summary.summarize
 templates.env.globals["run_collapsed"] = _update_summary.collapsed
 templates.env.globals["run_counts"] = _update_summary.counts
+
+
+def _device_label_of(device) -> str:
+    """Lokalizacja / Nazwa dla urzadzenia z ZALADOWANA relacja `location` (listy zbiorcze)."""
+    from app.queries import label
+    loc = getattr(device, "__dict__", {}).get("location")
+    return label(device.name, loc.name if loc is not None else None)
+
+
+templates.env.globals["device_label_of"] = _device_label_of
+
+from app import fleet_actions as _fleet_actions  # noqa: E402
+templates.env.globals["fleet_actions"] = _fleet_actions.ACTIONS
 templates.env.globals["local_tz"] = _timefmt.local_zone_name  # funkcja: strefe da sie zmienic w locie
 templates.env.globals["portal_update_available"] = _portal_update.update_available
 templates.env.globals["ros_too_old"] = _portal_update.routeros_too_old

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Zmiany w konfiguracji — MikroTik Manager{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Porównanie kopii</span>
+        <h1 class="page-title">{% if device %}<a href="/devices/{{ device.id }}">{{ device.name }}</a>{% else %}Urządzenie{% endif %} — zmiany w konfiguracji</h1>
+        {% if base %}
+        <p class="page-sub">Od <b>{{ base.created_at | dt("%Y-%m-%d %H:%M") }}</b> do <b>{{ backup.created_at | dt("%Y-%m-%d %H:%M") }}</b>:
+            <span class="pill pill-ok">+{{ added }}</span> <span class="pill pill-bad">−{{ removed }}</span>
+            {{ plural(added + removed, "linia", "linie", "linii") }}. Hasła i klucze są ukryte ({{ "•••" }}).</p>
+        {% endif %}
+    </div>
+</div>
+
+<section class="panel glow-card">
+    {% if exports | length > 1 %}
+    <form method="get" class="bare" style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem;">
+        <label for="other" style="margin:0;">Porównaj kopię z {{ current.created_at | dt("%Y-%m-%d %H:%M") }} z:</label>
+        <select id="other" name="other" style="width:auto; margin:0;">
+            {% for b in exports %}{% if b.id != current.id %}
+            <option value="{{ b.id }}" {% if base and b.id in (base.id, backup.id) %}selected{% endif %}>{{ b.created_at | dt("%Y-%m-%d %H:%M") }}</option>
+            {% endif %}{% endfor %}
+        </select>
+        <button type="submit" class="button-ghost button-sm">Porównaj</button>
+    </form>
+    {% endif %}
+
+    {% if not base %}
+    <div class="empty-state">To jedyny eksport tego urządzenia — nie ma z czym porównać.</div>
+    {% elif not rows %}
+    <div class="empty-state">Konfiguracja jest identyczna w obu kopiach.</div>
+    {% else %}
+    <pre class="diff">{% for r in rows %}<span class="diff-{{ r.kind }}">{% if r.kind == "add" %}+ {% elif r.kind == "del" %}− {% elif r.kind == "ctx" %}  {% endif %}{{ r.text }}{% if r.secret_changed %}   ← zmieniona wartość (ukryta){% endif %}</span>
+{% endfor %}</pre>
+    {% endif %}
+    <p class="form-foot">{% if device %}<a class="button button-ghost" href="/devices/{{ device.id }}">Wróć do urządzenia</a>{% endif %}</p>
+</section>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Wynik akcji — MikroTik Manager{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Akcja przez API</span>
+        <h1 class="page-title">{{ action.label }}</h1>
+        <p class="page-sub">{{ action.description }}</p>
+    </div>
+</div>
+<p class="{{ "notice" if ok_count == results | length else "error" }}">Wykonano na {{ ok_count }} z {{ results | length }}
+    {{ plural(results | length, "urządzenia", "urządzeń", "urządzeń") }}{% if ok_count != results | length %} — {{ results | length - ok_count }} z błędem{% endif %}.</p>
+<section class="panel glow-card">
+    <div class="table-wrap table-fit">
+        <table>
+            <thead><tr><th>Urządzenie</th><th>Wynik</th><th>Odpowiedź routera</th></tr></thead>
+            <tbody>
+                {% for r in results %}
+                <tr>
+                    <td><a href="/devices/{{ r.device.id }}">{{ device_label_of(r.device) }}</a></td>
+                    <td>{% if r.ok %}<span class="pill pill-ok">ok</span>{% else %}<span class="pill pill-bad">błąd</span>{% endif %}</td>
+                    <td style="white-space:pre-wrap;">{{ r.output or "—" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="form-foot"><a class="button button-ghost" href="{{ back }}">Wróć</a></p>
+</section>
+{% endblock %}

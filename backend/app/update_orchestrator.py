@@ -317,6 +317,17 @@ async def run_device_update(device_id: uuid.UUID, mode: str) -> None:
             )
 
 
+async def run_devices_update(device_ids: list[uuid.UUID], mode: str = "both") -> None:
+    """Zaznaczone urzadzenia (takze z roznych lokalizacji) — po kolei, kazde jako wlasny
+    przebieg z logiem krokow na stronie urzadzenia. Blad jednego nie zatrzymuje nastepnych:
+    to niezalezne urzadzenia, nie lancuch zasilania jak w lokalizacji."""
+    for device_id in device_ids:
+        try:
+            await run_device_update(device_id, mode)
+        except Exception:
+            logger.exception("Aktualizacja zbiorcza: blad przy urzadzeniu %s", device_id)
+
+
 async def run_location_update(location_id: uuid.UUID) -> None:
     async with async_session() as session:
         async with _RUN_LOCK:

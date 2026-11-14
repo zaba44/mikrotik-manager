@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from app.database import async_session
 from app.mailer import send_mail
 from app.models import Backup, Device, DeviceLogEntry, Location, Notification
+from app import fleet_health
 from app.queries import label
 from app.notifications import override_summary
 from app.settings_store import get_setting, set_setting
@@ -75,6 +76,19 @@ async def build_weekly_report(session) -> str:
             lines.append(f"  NIEUDANE: {label(name, location)} — {count}")
     else:
         lines.append("  Bez błędów.")
+    lines.append("")
+
+    # --- Wymaga uwagi: te same ostrzezenia co na stronie Flota ---
+    fleet = await fleet_health.load_devices(session)
+    problems = fleet_health.warnings(fleet, await fleet_health.failed_backups(session))
+    lines.append("== Wymaga uwagi ==")
+    if problems:
+        for w in problems:
+            names = ", ".join(label(d.name, d.location.name if d.location else None) for d in w.devices[:15])
+            more = f" i {len(w.devices) - 15} innych" if len(w.devices) > 15 else ""
+            lines.append(f"  {w.title} ({len(w.devices)}): {names}{more}")
+    else:
+        lines.append("  Nic.")
     lines.append("")
 
     # --- Aktualizacje ---

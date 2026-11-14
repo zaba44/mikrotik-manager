@@ -80,6 +80,29 @@
 
     {% include "_location_update.html" %}
 </section>
+
+{% if request.state.user and request.state.user.role == 'admin' and fleet_actions %}
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m13 2-9 12h7l-1 8 9-12h-7z"/></svg>
+            Akcje przez API na wszystkich urządzeniach
+        </h2>
+    </div>
+    <p class="hint">Portal wykonuje je sam na każdym urządzeniu tej lokalizacji i pokazuje wynik. Wybrane urządzenia
+        z różnych lokalizacji: <a href="/fleet">Flota</a>.</p>
+    {% for a in fleet_actions.values() %}
+    <form method="post" action="/fleet/run" class="bare" style="margin:0.5rem 0;"
+          data-confirm="{{ a.confirm }} na wszystkich urządzeniach w {{ location.name }} ({{ devices | length }})?">
+        <input type="hidden" name="action" value="{{ a.key }}">
+        {% for d in devices %}<input type="hidden" name="device_ids" value="{{ d.id }}">{% endfor %}
+        <input type="hidden" name="back" value="/locations/{{ location.id }}">
+        <button type="submit" class="button-ghost">{{ a.label }}</button>
+        <span class="hint" style="margin-left:0.5rem;">{{ a.description }}</span>
+    </form>
+    {% endfor %}
+</section>
+{% endif %}
 {% endif %}
 
 {% if devices %}

@@ -229,6 +229,19 @@ na tym MikroTiku — to jedyny krok, który nadal wymaga ręcznej roboty.</p>
 </details>
 {% endif %}
 
+<details class="panel glow-card sec" data-sec="wifi-clients">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5a10 10 0 0 1 14 0"/><path d="M8.5 16a5 5 0 0 1 7 0"/><path d="M12 19.5h.01"/><path d="M2 9a14 14 0 0 1 20 0"/></svg>
+            Klienci WiFi
+        </h2>
+        <button type="button" class="button-ghost button-sm" hx-get="/devices/{{ device.id }}/fragment/wifi-clients" hx-target="#wifi-clients-body" hx-swap="innerHTML" hx-disabled-elt="this">Odśwież</button>
+    </summary>
+    <div id="wifi-clients-body" hx-get="/devices/{{ device.id }}/fragment/wifi-clients" hx-trigger="sec-open once" hx-swap="innerHTML">
+        <span class="empty">Ładowanie…</span>
+    </div>
+</details>
+
 <details class="panel glow-card sec" data-sec="leases">
     <summary class="panel-head">
         <h2>
@@ -321,6 +334,28 @@ na tym MikroTiku — to jedyny krok, który nadal wymaga ręcznej roboty.</p>
         <span class="empty">Ładowanie…</span>
     </div>
 </details>
+
+{% if is_admin and fleet_actions %}
+<details class="panel glow-card sec" data-sec="api-actions">
+    <summary class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m13 2-9 12h7l-1 8 9-12h-7z"/></svg>
+            Akcje przez API
+        </h2>
+    </summary>
+    <p class="hint">Portal wykonuje je na routerze sam — bez wklejania w terminalu. Każdą można uruchamiać wielokrotnie.
+        Na wielu urządzeniach naraz: <a href="/fleet">Flota</a>.</p>
+    {% for a in fleet_actions.values() %}
+    <form method="post" action="/fleet/run" class="bare" style="margin:0.5rem 0;" data-confirm="{{ a.confirm }} na {{ device.name }}?">
+        <input type="hidden" name="action" value="{{ a.key }}">
+        <input type="hidden" name="device_ids" value="{{ device.id }}">
+        <input type="hidden" name="back" value="/devices/{{ device.id }}">
+        <button type="submit" class="button-ghost">{{ a.label }}</button>
+        <span class="hint" style="margin-left:0.5rem;">{{ a.description }}</span>
+    </form>
+    {% endfor %}
+</details>
+{% endif %}
 
 {% if is_admin %}
 <details class="panel glow-card sec" data-sec="config">

@@ -1374,3 +1374,18 @@ details.sec[open] > summary .sec-addr { opacity: 1; }
 .portal-version { display: block; margin: 0.4rem 0 0.2rem; font-size: 0.72rem; color: var(--text-faint); text-decoration: none; letter-spacing: 0.02em; }
 .portal-version:hover { color: var(--text); }
 .portal-version-new { color: var(--warn); font-weight: 600; }
+
+/* ---- Flota ---- */
+.fleet-warning { padding: 0.7rem 0; border-top: 1px solid var(--stroke); }
+.fleet-warning:first-of-type { border-top: 0; }
+.fleet-warning p { margin: 0.25rem 0; }
+.fleet-bar { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+.fleet-bar select { margin: 0; }
+
+/* ---- Porownanie kopii ---- */
+.diff { font-family: var(--mono); font-size: 0.8rem; line-height: 1.5; overflow-x: auto; margin: 0; }
+.diff span { display: block; white-space: pre; padding: 0 0.6rem; }
+.diff-add { background: rgba(47, 230, 168, 0.12); color: var(--ok); }
+.diff-del { background: rgba(255, 107, 129, 0.12); color: var(--bad); }
+.diff-ctx { color: var(--text-dim); }
+.diff-hunk { color: var(--c2); margin-top: 0.6rem; }

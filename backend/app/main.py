@@ -15,7 +15,7 @@ from app.config import settings
 from app.database import async_session
 from app.first_run import users_exist
 from app.models import Location, User
-from app.routers import auth, backups, dashboard, devices, locations, routerwg, routerwg_write, setup, settings as settings_router
+from app.routers import auth, backups, dashboard, devices, fleet, locations, routerwg, routerwg_write, setup, settings as settings_router
 from app.scheduler import start_scheduler
 from app.syslog_receiver import start_receiver, stop_receiver
 from app import portal_update, timefmt
@@ -28,7 +28,7 @@ from app.wg_config import load_wg_config
 _PUBLIC_EXACT = {"/login", "/health"}
 # Prefiksy tylko dla admina (kopie zawierają show-sensitive export = hasła; ustawienia
 # to konfiguracja globalna + peery admina + użytkownicy).
-_ADMIN_PREFIXES = ("/settings", "/backups")
+_ADMIN_PREFIXES = ("/settings", "/backups", "/fleet")
 _WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 # Zapisy dostępne dla każdego zalogowanego (dot. własnego konta).
 _SELF_WRITE = {"/logout", "/account/password"}
@@ -159,6 +159,7 @@ app.include_router(devices.router)
 app.include_router(routerwg.router)
 app.include_router(routerwg_write.router)
 app.include_router(backups.router)
+app.include_router(fleet.router)
 app.include_router(settings_router.router)
 
 

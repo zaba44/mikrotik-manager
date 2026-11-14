@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Flota — MikroTik Manager{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Wszystkie lokalizacje</span>
+        <h1 class="page-title">Flota</h1>
+        <p class="page-sub">Stan wszystkich urządzeń i akcje na wielu naraz. Dane z ostatniego odpytania — strona nie łączy się z routerami.</p>
+    </div>
+</div>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if note %}<p class="notice">{{ note }}</p>{% endif %}
+
+{% macro stat(value, label, cls="") %}
+<div class="panel stat {{ cls }} glow-card">
+    <div><div class="stat-value">{{ value }}</div><div class="stat-label">{{ label }}</div></div>
+</div>
+{% endmacro %}
+<div class="stats">
+    {{ stat(summary.total, "Urządzenia") }}
+    {{ stat(summary.online, "Online (API)", "stat-ok") }}
+    {{ stat(summary.wg_only, "Tunel działa, API nie", "stat-bad" if summary.wg_only else "") }}
+    {{ stat(summary.offline, "Offline", "stat-bad" if summary.offline else "") }}
+    {{ stat(summary.updates, "Dostępna aktualizacja") }}
+    {{ stat(summary.backup_failures, "Nieudane kopie (7 dni)", "stat-bad" if summary.backup_failures else "") }}
+</div>
+
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+            Wymaga uwagi
+        </h2>
+    </div>
+    {% if warnings %}
+    {% for w in warnings %}
+    <div class="fleet-warning">
+        <p><span class="pill {{ "pill-bad" if w.level == "bad" else "pill-warn" }}">{{ w.devices | length }}</span>
+            <strong>{{ w.title }}</strong>
+            <button type="button" class="button-ghost button-sm" data-fleet-pick="{% for d in w.devices %}{{ d.id }}{% if not loop.last %},{% endif %}{% endfor %}">zaznacz w tabeli</button></p>
+        <p class="hint">{{ w.hint }}</p>
+        <p>{% for d in w.devices %}<a href="/devices/{{ d.id }}">{{ device_label_of(d) }}</a>{% if w.key in ("too_old", "old") %} ({{ (d.routeros_version or "").split(" ")[0] }}){% elif w.key == "cert" %} (do {{ d.cert_expires_at | dt("%Y-%m-%d") }}){% elif w.key == "offline" %} (od {{ d.last_handshake_at | dt("%Y-%m-%d") }}){% elif w.key == "backup" %} ({{ backup_failures[d.id] }}){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="empty">Nic nie wymaga uwagi.</p>
+    {% endif %}
+    <p class="hint" style="margin-top:0.8rem;">Wersje RouterOS we flocie:
+        {% for v, n in summary.versions %}<span class="chip">{{ v }} × {{ n }}</span> {% endfor %}</p>
+</section>
+
+<form method="post" action="/fleet/run" id="fleet-form">
+<section class="panel glow-card">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01"/></svg>
+            Urządzenia
+        </h2>
+        <div class="head-tools">
+            <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+                <input type="search" placeholder="Szukaj: nazwa, lokalizacja, wersja…" data-filter="#fleet-devices tbody tr" data-filter-empty="#fleet-empty" aria-label="Szukaj urządzenia">
+            </div>
+        </div>
+    </div>
+    <div class="fleet-bar">
+        <span id="fleet-count" class="empty">zaznaczono 0</span>
+        <button type="button" class="button-ghost button-sm" data-fleet-all>zaznacz widoczne</button>
+        <button type="button" class="button-ghost button-sm" data-fleet-none>odznacz wszystkie</button>
+        <select name="action" id="fleet-action" aria-label="Akcja" style="width:auto; min-width:16rem;">
+            <option value="">— wybierz akcję —</option>
+            <optgroup label="Przez API, wynik od razu">
+                {% for a in actions.values() %}<option value="{{ a.key }}" data-confirm-text="{{ a.confirm }}" title="{{ a.description }}">{{ a.label }}</option>{% endfor %}
+            </optgroup>
+            <optgroup label="W tle, po kolei">
+                {% for key, pair in jobs.items() %}<option value="{{ key }}" data-confirm-text="{{ pair[0] }}" title="{{ pair[1] }}">{{ pair[0] }}</option>{% endfor %}
+            </optgroup>
+        </select>
+        <button type="submit" id="fleet-run">Wykonaj na zaznaczonych</button>
+    </div>
+    <p class="hint" id="fleet-action-hint"></p>
+    <div class="table-wrap">
+        <table class="sortable" id="fleet-devices">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th data-sort="text">Nazwa</th>
+                    <th data-sort="text">Lokalizacja</th>
+                    <th data-sort="text">Model</th>
+                    <th data-sort="text">RouterOS</th>
+                    <th data-sort="text">Firmware</th>
+                    <th data-sort="number">Status</th>
+                    <th data-sort="text">Ostatni kontakt</th>
+                    <th data-sort="text">Uwagi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for device in devices %}
+                {% set status_weight = 3 if device.api_reachable else (2 if device.wg_reachable else (1 if device.last_polled_at else 0)) %}
+                <tr>
+                    <td><input type="checkbox" name="device_ids" value="{{ device.id }}" style="width:auto; margin:0;" aria-label="Zaznacz {{ device.name }}"></td>
+                    <td><a href="/devices/{{ device.id }}">{{ device.name }}</a></td>
+                    <td>{% if device.location %}<a href="/locations/{{ device.location.id }}">{{ device.location.name }}</a>{% else %}<span class="empty">—</span>{% endif %}</td>
+                    <td>{{ device.board_name or "—" }}</td>
+                    <td>{{ (device.routeros_version or "—").split(" ")[0] }}{% if device.available_routeros_version and device.available_routeros_version not in (device.routeros_version or "") %} <span class="pill pill-warn">↑ {{ device.available_routeros_version }}</span>{% endif %}</td>
+                    <td>{{ device.current_firmware or "—" }}{% if device.available_firmware and device.current_firmware and device.available_firmware != device.current_firmware %} <span class="pill pill-warn">↑ {{ device.available_firmware }}</span>{% endif %}</td>
+                    <td data-sort-value="{{ status_weight }}">{% if device.last_polled_at is none %}<span class="pill pill-idle">nie sprawdzono</span>{% elif device.api_reachable %}<span class="pill pill-ok"><span class="dot"></span>online</span>{% elif device.wg_reachable %}<span class="pill pill-warn"><span class="dot"></span>WG OK, API nie</span>{% else %}<span class="pill pill-bad"><span class="dot"></span>offline</span>{% endif %}</td>
+                    <td>{{ device.last_handshake_at | dt("%Y-%m-%d %H:%M") }}</td>
+                    <td>{% if backup_failures.get(device.id) %}<span class="pill pill-bad">kopie: {{ backup_failures[device.id] }} błędów</span>{% endif %}{% if ros_too_old(device.routeros_version) %} <span class="pill pill-bad">RouterOS &lt; {{ ros_min }}</span>{% endif %}{% if device.has_lte %} <span class="pill pill-info">LTE</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="empty" id="fleet-empty" style="display:none;">Brak urządzeń pasujących do wyszukiwania.</p>
+</section>
+</form>
+<script src="/static/fleet.js?v={{ asset_v }}" defer></script>
+{% endblock %}

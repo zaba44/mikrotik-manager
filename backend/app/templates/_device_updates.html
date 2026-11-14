@@ -10,6 +10,28 @@
     </dl>
 
     {% include "_update_run_log.html" %}
+    {% if run and run.earlier %}
+    {% from "_update_steps_table.html" import steps_table %}
+    <details class="runlog-fold runlog-history" data-keep="history">
+        <summary>wcześniejsze aktualizacje ({{ run.earlier | length }})</summary>
+        {% for past in run.earlier %}
+        <div class="runlog runlog-past">
+            <div class="runlog-head">
+                <strong>{{ past.started_at | dt("%Y-%m-%d %H:%M") }}</strong>
+                <span class="pill {% if past.status == 'succeeded' %}pill-ok{% else %}pill-bad{% endif %}">{{ past.status }}</span>
+                {% if past.finished_at %}<span class="empty">– {{ past.finished_at | dt("%H:%M") }}</span>{% endif %}
+            </div>
+            {% if past.error_message %}<p class="error">{{ past.error_message }}</p>{% endif %}
+            {% if past.steps %}
+            <details class="runlog-fold" data-keep="steps-{{ past.id }}">
+                <summary>kroki ({{ past.steps | length }})</summary>
+                {{ steps_table(past.steps) }}
+            </details>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </details>
+    {% endif %}
 
     {% if can_operate %}
     <div class="actions-row">
