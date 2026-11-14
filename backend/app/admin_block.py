@@ -94,6 +94,24 @@ async def set_prefix(session: AsyncSession, prefix: int) -> None:
     await set_setting(session, SETTING_KEY, str(prefix))
 
 
+ISOLATE_KEY = "wg_isolate_peers"
+
+
+async def isolation_enabled(session: AsyncSession) -> bool:
+    return (await get_setting(session, ISOLATE_KEY) or "1") != "0"
+
+
+async def sync_isolation(session: AsyncSession) -> str | None:
+    """Wysyla na hub aktualna polityke (wlaczona? ktory blok?). Wolane przy starcie, po zmianie
+    bloku i przelacznika. Zwraca opis bledu albo None — hub w starszej wersji nie zna tej
+    trasy i to nie moze wywracac startu portalu."""
+    from app.wg_agent_client import set_isolation
+    if not wg.configured:
+        return None
+    ok, error = await set_isolation(await isolation_enabled(session), str(await get_block(session)))
+    return None if ok else error
+
+
 def winbox_script(block: str, lst: str = "mtm-admin", comment: str = "MTM: Winbox dla adminow") -> str:
     """Uniwersalny skrypt dla KAZDEGO routera floty (RouterOS 7.15–7.24, sprawdzone na zywo).
 

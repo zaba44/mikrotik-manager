@@ -17,7 +17,7 @@ from app.auth import can_operate, is_admin, require_admin, require_location, req
 from app.backup_service import backup_device
 from app.config import settings
 from app.database import async_session, get_session
-from app import admin_block, local_address
+from app import admin_block, local_address, readdress
 from app.log_report import build_report, content_disposition
 from app.log_store import purge
 from app.models import (Backup, Device, DeviceLogEntry, Location, NotificationOverride, PingTarget,
@@ -312,7 +312,7 @@ async def create_device(
 
 
 @router.get("/{device_id}")
-async def device_detail(request: Request, device_id: str, err: str = "",
+async def device_detail(request: Request, device_id: str, err: str = "", note: str = "",
                         session: AsyncSession = Depends(get_session)):
     device = await session.get(Device, _parse_uuid(device_id))
     if device is None:
@@ -338,8 +338,35 @@ async def device_detail(request: Request, device_id: str, err: str = "",
             "backups": backups,
             "ping_targets": ping_targets,
             "peer_warning": err or None,
+            "note": note or None,
+            "is_admin_device": wg.configured and await readdress.is_admin_device(session, device),
         },
     )
+
+
+@router.post("/{device_id}/readdress")
+async def readdress_device(request: Request, device_id: str, to_admin: str = Form(""),
+                           session: AsyncSession = Depends(get_session)):
+    """Zwykle urzadzenie <-> urzadzenie administracyjne: zmiana adresu tunelu na dzialajacym
+    routerze (drugi adres, przelaczenie huba, sprawdzenie, zdjecie starego)."""
+    require_admin(request)
+    device = await session.get(Device, _parse_uuid(device_id))
+    if device is None:
+        raise HTTPException(status_code=404, detail="Nie znaleziono urządzenia")
+    want_admin = bool(to_admin)
+    if want_admin == await readdress.is_admin_device(session, device):
+        return RedirectResponse(url=f"/devices/{device_id}", status_code=303)
+    old = str(device.wg_ip)
+    try:
+        new = await readdress.move(session, device, want_admin)
+        await session.commit()
+    except (readdress.ReaddressError, AdminBlockFull, RuntimeError) as exc:
+        await session.rollback()
+        return RedirectResponse(url=f"/devices/{device_id}?err=" + quote(str(exc)), status_code=303)
+    invalidate_device_map()
+    kind = "administracyjnym (ma Winbox do routerów floty)" if want_admin else "zwykłym"
+    return RedirectResponse(url=f"/devices/{device_id}?note=" + quote(
+        f"Adres tunelu zmieniony z {old} na {new} — urządzenie jest teraz {kind}."), status_code=303)
 
 
 @router.get("/{device_id}/fragment/health")

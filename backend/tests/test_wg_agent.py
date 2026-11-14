@@ -163,3 +163,36 @@ def test_masquerade_without_subnet_falls_back(agent, monkeypatch):
     monkeypatch.setattr("time.sleep", lambda s: None)
     agent._ensure_nat_dnat()
     assert ["iptables", "-t", "nat", "-A", "POSTROUTING", "-o", "wg-mt", "-j", "MASQUERADE"] in calls
+
+
+def test_isolation_only_admin_block_between_peers(agent, monkeypatch):
+    """Miedzy peerami: odpowiedzi, ruch z bloku admina, reszta DROP — we wlasnym lancuchu.
+    Polityka zapisana w pliku wraca po restarcie kontenera."""
+    calls = []
+    monkeypatch.setattr(agent, "run", lambda cmd, check=True: calls.append(cmd) or "")
+    monkeypatch.setattr(agent, "ISOLATION_FILE", agent.CONF_DIR + "/isolation.json")
+    monkeypatch.setattr(agent.subprocess, "run", lambda *a, **k: __import__("types").SimpleNamespace(returncode=1))
+    agent.set_isolation(True, "10.77.3.225/27")
+    assert agent.load_isolation() == {"enabled": True, "admin_block": "10.77.3.224/27"}
+    chain = [c[3:] for c in calls if c[:3] == ["iptables", "-A", "MTM-ISOLATE"]]
+    assert chain == [["-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"],
+                     ["-s", "10.77.3.224/27", "-j", "ACCEPT"], ["-j", "DROP"]]
+    assert ["iptables", "-I", "FORWARD", "1", "-i", "wg-mt", "-o", "wg-mt", "-j", "MTM-ISOLATE"] in calls
+    assert calls.index(["iptables", "-F", "MTM-ISOLATE"]) < calls.index(["iptables", "-A", "MTM-ISOLATE", "-j", "DROP"])
+
+    calls.clear()
+    agent.set_isolation(False, "10.77.3.224/27")          # wylaczona: lancuch pusty, nic nie blokuje
+    assert ["iptables", "-F", "MTM-ISOLATE"] in calls
+    assert not any(c[:3] == ["iptables", "-A", "MTM-ISOLATE"] for c in calls)
+
+
+def test_readding_peer_with_new_address_updates_saved_config(agent):
+    """Zmiana adresu tunelu urzadzenia: zapis musi isc za interfejsem, inaczej po restarcie
+    kontenera hub wracalby do starego adresu."""
+    agent.add_peer("A", "10.9.0.2")
+    agent.add_peer("B", "10.9.0.3")
+    agent.add_peer("A", "10.9.0.250")
+    conf = _conf(agent)
+    assert conf.count("PublicKey = A\n") == 1 and "AllowedIPs = 10.9.0.250/32" in conf
+    assert "AllowedIPs = 10.9.0.2/32" not in conf and "AllowedIPs = 10.9.0.3/32" in conf
+    assert agent.fake.peers["A"] == "10.9.0.250/32"

@@ -86,3 +86,15 @@ async def get_private_key() -> str | None:
             return resp.json().get("private_key")
     except Exception:
         return None
+
+
+async def set_isolation(enabled: bool, admin_block: str | None) -> tuple[bool, str | None]:
+    """Polityka ruchu miedzy peerami na hubie (agent zapisuje ja i odtwarza po restarcie)."""
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(f"{_BASE_URL}/isolation", headers=_HEADERS,
+                                     json={"enabled": enabled, "admin_block": admin_block})
+            resp.raise_for_status()
+            return True, None
+    except Exception as e:
+        return False, str(e)

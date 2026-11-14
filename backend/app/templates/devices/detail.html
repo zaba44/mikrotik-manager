@@ -24,6 +24,7 @@ na tym MikroTiku — to jedyny krok, który nadal wymaga ręcznej roboty.</p>
 {% endif %}
 
 {% if peer_warning %}<p class="error">{{ peer_warning }}</p>{% endif %}
+{% if note %}<p class="notice">{{ note }}</p>{% endif %}
 {% if ros_too_old(device.routeros_version) %}
 <p class="error"><strong>RouterOS {{ device.routeros_version }} jest starszy niż wymagane {{ ros_min }}.</strong>
     Część funkcji portalu nie zadziała na tym urządzeniu (m.in. nazwane peery WireGuard, moduł WireGuard i Back To Home,
@@ -391,6 +392,16 @@ na tym MikroTiku — to jedyny krok, który nadal wymaga ręcznej roboty.</p>
 
         <p class="form-foot"><button type="submit">Zapisz</button></p>
     </form>
+    {% if is_admin and is_admin_device is defined %}
+    <form method="post" action="/devices/{{ device.id }}/readdress" class="bare" style="margin-top:1.2rem;"
+          data-confirm="{% if is_admin_device %}Zmienić {{ device.name }} w zwykłe urządzenie? Dostanie nowy adres tunelu i straci Winbox do routerów floty.{% else %}Zmienić {{ device.name }} w urządzenie administracyjne? Dostanie adres z bloku administracyjnego i Winbox do routerów floty.{% endif %}">
+        {% if not is_admin_device %}<input type="hidden" name="to_admin" value="1">{% endif %}
+        <p class="hint">{% if is_admin_device %}To <b>urządzenie administracyjne</b> (adres z bloku administracyjnego).
+            {% else %}To zwykłe urządzenie.{% endif %}
+            Zmiana przenosi adres tunelu na działającym routerze przez API — bez ponownej rejestracji. Router musi być online.</p>
+        <button type="submit" class="button-ghost">{% if is_admin_device %}Zmień w zwykłe urządzenie{% else %}Zmień w urządzenie administracyjne{% endif %}</button>
+    </form>
+    {% endif %}
 </details>
 
 <details class="panel panel-danger sec" data-sec="danger">

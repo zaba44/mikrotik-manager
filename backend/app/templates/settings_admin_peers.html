@@ -190,5 +190,25 @@
         <p class="form-foot"><button type="submit" class="button-ghost">Zapisz wielkość bloku</button></p>
     </form>
 </section>
+
+<section class="panel glow-card" style="max-width: 760px;">
+    <div class="panel-head">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Ruch między peerami przez hub
+        </h2>
+    </div>
+    <p class="hint">Hub łączy wszystkie tunele, więc bez ograniczenia router jednego klienta może przez hub
+    sięgać do routerów innych klientów. Z włączoną izolacją między peerami przechodzi tylko ruch
+    <b>z bloku administracyjnego</b> (<code>{{ block }}</code>) i odpowiedzi na niego. Połączenia portalu
+    z routerami (API, kopie, syslog) oraz dostęp do panelu przez tunel działają bez zmian.</p>
+    <form method="post" action="/settings/admin-peers/isolation">
+        <label style="display:flex; align-items:center; gap:0.55rem; cursor:pointer;">
+            <input type="checkbox" name="isolate" value="1" style="width:auto; margin:0;" {% if isolate %}checked{% endif %}>
+            <b>Izoluj peery od siebie</b> (zalecane)
+        </label>
+        <p class="form-foot"><button type="submit" class="button-ghost">Zapisz</button></p>
+    </form>
+</section>
 {% endif %}
 {% endblock %}

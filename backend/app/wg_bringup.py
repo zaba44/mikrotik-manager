@@ -61,4 +61,17 @@ async def ensure_wg_up(private_key: str | None = None) -> str | None:
             await set_setting(session, "wg_server_public_key", pubkey)
         logger.info("Zaktualizowano klucz publiczny huba w bazie")
 
+    # Polityka ruchu miedzy peerami: przy kazdym podniesieniu (start, kreator, odtworzenie
+    # kopii) hub dostaje aktualny blok administracyjny. Stary agent tej trasy nie zna —
+    # ostrzezenie, nie blad.
+    # Sam tunel jest wazniejszy niz polityka — jej blad nie moze przerwac podnoszenia.
+    try:
+        from app import admin_block
+        async with async_session() as session:
+            error = await admin_block.sync_isolation(session)
+    except Exception as e:
+        error = f"{type(e).__name__}: {e}"
+    if error:
+        logger.warning("Polityka izolacji peerow nie dotarla na hub: %s", error)
+
     return pubkey

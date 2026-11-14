@@ -496,8 +496,22 @@ async def _render_admin_peers(request, session, *, new_peer=None, new_config=Non
             # peery sprzed bloku (albo po recznej zmianie) — Winbox z nich nie zadziala
             "outside_peers": [p for p in peers if ipaddress.ip_address(p.wg_ip) not in block],
             "winbox_script": admin_block.winbox_script(str(block)),
+            "isolate": await admin_block.isolation_enabled(session),
         })
     return templates.TemplateResponse("settings_admin_peers.html", ctx, status_code=status_code)
+
+
+@router.post("/admin-peers/isolation")
+async def set_peer_isolation(request: Request, isolate: str = Form(""), session: AsyncSession = Depends(get_session)):
+    await set_setting(session, admin_block.ISOLATE_KEY, "1" if isolate else "0")
+    hub_error = await admin_block.sync_isolation(session)
+    if hub_error:
+        return await _render_admin_peers(request, session, status_code=503, error=(
+            f"Ustawienie zapisane, ale hub go nie przyjął ({hub_error}). Zapisz ponownie za chwilę."))
+    return await _render_admin_peers(request, session, notice=(
+        "Izolacja włączona: przez hub przechodzi między peerami tylko ruch z bloku administracyjnego."
+        if isolate else
+        "Izolacja wyłączona: każdy peer może łączyć się przez hub z każdym innym."))
 
 
 @router.post("/admin-peers/block")
@@ -511,7 +525,12 @@ async def set_admin_block(request: Request, prefix: int = Form(...), session: As
         return await _render_admin_peers(request, session, error=problem, status_code=409)
     await admin_block.set_prefix(session, prefix)
     new = await admin_block.get_block(session)
+    hub_error = await admin_block.sync_isolation(session)  # hub przepuszcza miedzy peerami tylko blok
     notice = None
+    if hub_error:
+        return await _render_admin_peers(request, session, status_code=503, error=(
+            f"Blok zapisany ({new}), ale hub nie przyjął nowej polityki ruchu ({hub_error}). "
+            "Zapisz ponownie, gdy kontener wireguard będzie odpowiadał."))
     if new != old:
         notice = (f"Blok administracyjny zmieniony z {old} na {new}. Wklej skrypt poniżej ponownie na routerach "
                   "floty — podmieni wpis zakresu na liście mtm-admin. Do tego czasu routery wpuszczają Winbox "

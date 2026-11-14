@@ -169,11 +169,61 @@ def _ensure_nat_dnat() -> None:
         print("[agent] WARNING: nie rozwiązano 'backend', DNAT SFTP/syslog pominięty", flush=True)
 
 
+ISOLATION_FILE = f"{CONF_DIR}/isolation.json"
+ISOLATION_CHAIN = "MTM-ISOLATE"
+
+
+def apply_isolation(enabled: bool, admin_block: str | None) -> None:
+    """Ruch peer -> hub -> peer. Hub jest routerem dla calej floty, wiec bez tego router
+    klienta A siega do routera klienta B (i do kazdego urzadzenia bez wlasnego firewalla).
+    Wlaczone: miedzy peerami przechodzi tylko ruch Z bloku administracyjnego i odpowiedzi
+    na niego. Ruch hub <-> peer (backend, SFTP, syslog, panel) nie idzie tym lancuchem.
+    Wlasny lancuch, zeby przebudowa byla atomowa dla naszych regul i nie ruszala cudzych."""
+    run(["iptables", "-N", ISOLATION_CHAIN], check=False)
+    run(["iptables", "-F", ISOLATION_CHAIN])
+    jump = ["-i", WG_INTERFACE, "-o", WG_INTERFACE, "-j", ISOLATION_CHAIN]
+    if subprocess.run(["iptables", "-C", "FORWARD", *jump], capture_output=True).returncode != 0:
+        run(["iptables", "-I", "FORWARD", "1", *jump])
+    if not enabled:
+        print("[agent] izolacja peerow WYLACZONA — peery widza sie nawzajem", flush=True)
+        return
+    run(["iptables", "-A", ISOLATION_CHAIN, "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"])
+    if admin_block:
+        run(["iptables", "-A", ISOLATION_CHAIN, "-s", admin_block, "-j", "ACCEPT"])
+    run(["iptables", "-A", ISOLATION_CHAIN, "-j", "DROP"])
+    print(f"[agent] izolacja peerow: miedzy peerami tylko ruch z {admin_block or '(brak bloku)'}", flush=True)
+
+
+def load_isolation() -> dict | None:
+    try:
+        with open(ISOLATION_FILE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def set_isolation(enabled: bool, admin_block: str | None) -> None:
+    """Zapis PRZED zastosowaniem: po restarcie kontenera reguly wracaja z pliku, zanim
+    backend zdazy je przyslac ponownie."""
+    if admin_block:
+        admin_block = str(ipaddress.ip_network(admin_block, strict=False))
+    os.makedirs(CONF_DIR, exist_ok=True)
+    tmp = ISOLATION_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump({"enabled": bool(enabled), "admin_block": admin_block}, f)
+    os.replace(tmp, ISOLATION_FILE)
+    if interface_up():
+        apply_isolation(bool(enabled), admin_block)
+
+
 def bring_up() -> None:
     if not interface_up():
         run(["wg-quick", "up", WG_INTERFACE])
         print(f"[agent] {WG_INTERFACE} up, public key: {public_key()}", flush=True)
     _ensure_nat_dnat()
+    saved = load_isolation()
+    if saved is not None:  # brak pliku = backend jeszcze nie przyslal polityki (stara wersja)
+        apply_isolation(bool(saved.get("enabled")), saved.get("admin_block"))
 
 
 def setup_interface(subnet: str, server_ip: str, private_key: str | None) -> str:
@@ -307,7 +357,14 @@ def _persist_add(pubkey: str, allowed_ip: str, psk: str | None = None) -> None:
     with open(CONF_FILE) as f:
         content = f.read()
     if f"PublicKey = {pubkey}\n" in content:
-        return
+        # Ten sam peer z innym adresem (zmiana adresu tunelu urzadzenia): dawniej zapis
+        # byl pomijany, wiec po restarcie kontenera wracal stary adres.
+        m = re.search(r"\[Peer\]\nPublicKey = " + re.escape(pubkey) + r"\n(?:[^\[\n][^\n]*\n)*", content)
+        if m and f"AllowedIPs = {allowed_ip}/32\n" in m.group(0):
+            return
+        _persist_remove(pubkey)
+        with open(CONF_FILE) as f:
+            content = f.read()
     block = f"\n[Peer]\nPublicKey = {pubkey}\n"
     if psk:
         block += f"PresharedKey = {psk}\n"
@@ -352,6 +409,7 @@ class Handler(BaseHTTPRequestHandler):
                     "public_key": public_key(),
                     "listen_port": WG_PORT,
                     "version": os.environ.get("MTM_BUILD_VERSION") or "dev",
+                    "isolation": load_isolation(),
                 })
             if self.path == "/privatekey":
                 if not os.path.exists(KEY_FILE):
@@ -388,6 +446,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(400, {"error": "public_key i allowed_ip wymagane"})
                 add_peer(pubkey, allowed_ip, b.get("preshared_key"))
                 return self._send(201, {"status": "ok"})
+            if self.path == "/isolation":
+                b = self._body()
+                set_isolation(bool(b.get("enabled")), b.get("admin_block"))
+                return self._send(200, {"status": "ok", "isolation": load_isolation()})
         except Exception as e:
             self._log_exception("POST", self.path, e)
             return self._send(500, {"error": str(e)})
