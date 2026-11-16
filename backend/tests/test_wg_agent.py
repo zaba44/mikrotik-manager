@@ -175,8 +175,9 @@ def test_isolation_only_admin_block_between_peers(agent, monkeypatch):
     agent.set_isolation(True, "10.77.3.225/27")
     assert agent.load_isolation() == {"enabled": True, "admin_block": "10.77.3.224/27"}
     chain = [c[3:] for c in calls if c[:3] == ["iptables", "-A", "MTM-ISOLATE"]]
-    assert chain == [["-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"],
-                     ["-s", "10.77.3.224/27", "-j", "ACCEPT"], ["-j", "DROP"]]
+    assert chain == [["-s", "10.77.3.224/27", "-j", "ACCEPT"],
+                     ["-d", "10.77.3.224/27", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"],
+                     ["-j", "DROP"]]
     assert ["iptables", "-I", "FORWARD", "1", "-i", "wg-mt", "-o", "wg-mt", "-j", "MTM-ISOLATE"] in calls
     assert calls.index(["iptables", "-F", "MTM-ISOLATE"]) < calls.index(["iptables", "-A", "MTM-ISOLATE", "-j", "DROP"])
 

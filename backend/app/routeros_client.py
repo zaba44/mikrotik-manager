@@ -1009,6 +1009,15 @@ def _signal(row: dict) -> int | None:
         return None
 
 
+def _rate(value) -> str | None:
+    """`tx-rate` w sterowniku `wifi` to bity na sekunde („270000000"); stary sterownik podaje
+    juz opis („130Mbps-20MHz/2S") — ten zostaje bez zmian."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    return f"{int(text) / 1_000_000:.0f} Mbps" if text.isdigit() else text
+
+
 def parse_wifi_clients(rows: list, leases: dict, caps: dict) -> list[dict]:
     """Wiersze tabeli rejestracji -> wspolny ksztalt. `leases`: mac -> (adres, nazwa hosta),
     `caps`: interfejs -> opis („operated by CAP ...") dla interfejsow capow."""
@@ -1024,7 +1033,7 @@ def parse_wifi_clients(rows: list, leases: dict, caps: dict) -> list[dict]:
         out.append({
             "mac": mac, "interface": iface, "ssid": r.get("ssid"), "signal": _signal(r),
             "uptime": r.get("uptime"), "band": r.get("band"),
-            "tx_rate": r.get("tx-rate"), "rx_rate": r.get("rx-rate"),
+            "tx_rate": _rate(r.get("tx-rate")), "rx_rate": _rate(r.get("rx-rate")),
             "address": address or r.get("last-ip"), "host": host or r.get("comment"),
             "cap": caps.get(iface),
         })

@@ -74,7 +74,7 @@ def test_run_script_reports_router_error_and_output(monkeypatch):
     def handler(request):
         if request.url.host == "10.77.0.66":
             return httpx.Response(400, json={"detail": "expected end of command (line 2 column 4)"})
-        return httpx.Response(200, json={"ret": "MTM: gotowe\r\n"})
+        return httpx.Response(200, json={"ret": "progress: |\r\n\r\nprogress: done\r\n\r\nMTM: gotowe\r\n"})
     real = httpx.AsyncClient
     monkeypatch.setattr(fleet_actions.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler)))
     monkeypatch.setattr(fleet_actions, "_auth", lambda d: None)
@@ -88,7 +88,7 @@ def test_run_script_reports_router_error_and_output(monkeypatch):
 
 def test_wifi_clients_joined_with_leases_and_caps():
     rows = [{"mac-address": "aa:bb:cc:00:00:01", "interface": "BUDEX_WIFI1-5-ax", "ssid": "BUDEX", "signal": "-58",
-             "uptime": "2h3m", "tx-rate": "866Mbps", "rx-rate": "780Mbps", "band": "5ghz-ax"},
+             "uptime": "2h3m", "tx-rate": "270000000", "rx-rate": "130Mbps-20MHz/2S", "band": "5ghz-ax"},
             {"mac-address": "AA:BB:CC:00:00:02", "interface": "wlan1", "signal-strength": "-81dBm@6Mbps", "last-ip": "192.168.1.50"},
             {"interface": "bez-mac"}]
     clients = parse_wifi_clients(rows, {"AA:BB:CC:00:00:01": ("192.168.55.20", "laptop-jan")},
@@ -96,6 +96,7 @@ def test_wifi_clients_joined_with_leases_and_caps():
     assert len(clients) == 2
     a = next(c for c in clients if c["mac"].endswith("01"))
     assert (a["host"], a["address"], a["signal"], a["cap"][:15]) == ("laptop-jan", "192.168.55.20", -58, "operated by CAP")
+    assert (a["tx_rate"], a["rx_rate"]) == ("270 Mbps", "130Mbps-20MHz/2S")  # bity/s z `wifi`, opis ze starego
     b = next(c for c in clients if c["mac"].endswith("02"))
     assert (b["signal"], b["address"], b["host"]) == (-81, "192.168.1.50", None)
     html = templates.get_template("_device_wifi_clients.html").render(r={"ok": True, "supported": True, "clients": clients})

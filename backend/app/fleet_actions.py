@@ -121,8 +121,10 @@ async def run_script(device: Device, script: str, timeout: float = 90.0) -> dict
             data = {}
         if resp.status_code >= 400:
             return {"ok": False, "output": str(data.get("detail") or data.get("message") or f"HTTP {resp.status_code}")}
-        out = str(data.get("ret", "")).replace("\r\n", "\n").strip()
-        return {"ok": True, "output": out}
+        # `/certificate sign` dopisuje do wyniku klatki paska postepu („progress: |") — to szum.
+        lines = [ln for ln in str(data.get("ret", "")).replace("\r\n", "\n").split("\n")
+                 if ln.strip() and not ln.strip().startswith("progress:")]
+        return {"ok": True, "output": "\n".join(lines)}
     except httpx.TimeoutException:
         return {"ok": False, "output": "router nie odpowiedział w czasie"}
     except Exception as e:

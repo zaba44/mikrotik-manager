@@ -14,7 +14,7 @@ from app.backup_service import backup_device
 from app.database import get_session
 from app.models import Device
 from app.queries import list_locations
-from app.templating import templates
+from app.templating import plural, templates
 from app.timefmt import utc_now_aware
 from app.update_orchestrator import run_devices_update
 
@@ -74,7 +74,8 @@ async def fleet_run(request: Request, action: str = Form(""), device_ids: list[s
         job = run_devices_update if action == "update" else _backups_in_order
         request.app.state.scheduler.add_job(job, args=[ids], next_run_time=utc_now_aware())
         return RedirectResponse(url=f"{back}{sep}note=" + quote(
-            f"{JOBS[action][0]}: uruchomiono dla {len(ids)} urządzeń. {JOBS[action][1]}"), status_code=303)
+            f"{JOBS[action][0]}: uruchomiono dla {len(ids)} {plural(len(ids), 'urządzenia', 'urządzeń', 'urządzeń')}. "
+            f"{JOBS[action][1]}"), status_code=303)
     if action not in fleet_actions.ACTIONS:
         return RedirectResponse(url=f"{back}{sep}err=" + quote("Wybierz akcję."), status_code=303)
     results = await fleet_actions.run_many(session, devices, action)

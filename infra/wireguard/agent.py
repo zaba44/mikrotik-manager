@@ -177,7 +177,7 @@ def apply_isolation(enabled: bool, admin_block: str | None) -> None:
     """Ruch peer -> hub -> peer. Hub jest routerem dla calej floty, wiec bez tego router
     klienta A siega do routera klienta B (i do kazdego urzadzenia bez wlasnego firewalla).
     Wlaczone: miedzy peerami przechodzi tylko ruch Z bloku administracyjnego i odpowiedzi
-    na niego. Ruch hub <-> peer (backend, SFTP, syslog, panel) nie idzie tym lancuchem.
+    wracajace do niego. Ruch hub <-> peer (backend, SFTP, syslog, panel) nie idzie tym lancuchem.
     Wlasny lancuch, zeby przebudowa byla atomowa dla naszych regul i nie ruszala cudzych."""
     run(["iptables", "-N", ISOLATION_CHAIN], check=False)
     run(["iptables", "-F", ISOLATION_CHAIN])
@@ -187,9 +187,12 @@ def apply_isolation(enabled: bool, admin_block: str | None) -> None:
     if not enabled:
         print("[agent] izolacja peerow WYLACZONA — peery widza sie nawzajem", flush=True)
         return
-    run(["iptables", "-A", ISOLATION_CHAIN, "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"])
+    # Odpowiedzi przechodza TYLKO do bloku administracyjnego. „Kazdy nawiazany ruch" zostawial
+    # po wlaczeniu izolacji trwajace polaczenia miedzy routerami klientow (sprawdzone w labie).
     if admin_block:
         run(["iptables", "-A", ISOLATION_CHAIN, "-s", admin_block, "-j", "ACCEPT"])
+        run(["iptables", "-A", ISOLATION_CHAIN, "-d", admin_block, "-m", "conntrack",
+             "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"])
     run(["iptables", "-A", ISOLATION_CHAIN, "-j", "DROP"])
     print(f"[agent] izolacja peerow: miedzy peerami tylko ruch z {admin_block or '(brak bloku)'}", flush=True)
 

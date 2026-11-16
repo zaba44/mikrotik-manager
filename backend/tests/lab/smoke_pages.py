@@ -21,10 +21,10 @@ async def main():
         devs = dict(re.findall(r'href="/devices/([0-9a-f-]{36})"[^>]*>\s*([^<]+)', home))
         locs = list(dict.fromkeys(re.findall(r'href="/locations/([0-9a-f-]{36})"', home)))
         pages = ["/", "/locations", "/settings", "/settings/cert", "/settings/syslog", "/settings/smtp",
-                 "/settings/notifications", "/settings/admin-peers", "/settings/users", "/settings/about", "/account"]
+                 "/settings/notifications", "/settings/admin-peers", "/settings/users", "/settings/about", "/account", "/fleet"]
         pages += [f"/locations/{l}" for l in locs]
         frags = ["", "/fragment/health", "/fragment/interfaces", "/fragment/addresses", "/fragment/poe",
-                 "/fragment/leases", "/fragment/syslog", "/fragment/backups", "/fragment/notifications",
+                 "/fragment/leases", "/fragment/wifi-clients", "/fragment/syslog", "/fragment/backups", "/fragment/notifications",
                  "/fragment/winbox-rule", "/fragment/wireguard", "/wireguard", "/bth"]
         reachable = []
         for did, name in devs.items():
